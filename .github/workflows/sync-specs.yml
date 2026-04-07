@@ -23,7 +23,6 @@ jobs:
           script: |
             const fs = require('fs');
 
-            // Obtener todos los issues con label 'spec'
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -32,43 +31,33 @@ jobs:
               per_page: 100
             });
 
-            // Agrupar por estado
             const abiertos = issues.filter(i => i.state === 'open');
             const completados = issues.filter(i => i.state === 'closed');
 
-            // Generar markdown
-            let content = `# Especificaciones - App Control Gastos
-
-**Última actualización:** ${new Date().toLocaleString('es-ES')}
-
-## En Desarrollo (${abiertos.length})
-
-`;
+            let content = '# Especificaciones - App Control Gastos\n\n';
+            content += '**Última actualización:** ' + new Date().toLocaleString('es-ES') + '\n\n';
+            content += '## En Desarrollo (' + abiertos.length + ')\n\n';
 
             abiertos.forEach(issue => {
-              content += `- [ ] **#${issue.number}** - ${issue.title}\n`;
+              content += '- [ ] **#' + issue.number + '** - ' + issue.title + '\n';
               if (issue.body) {
-                content += `  > ${issue.body.split('\n')[0]}\n`;
+                content += '  > ' + issue.body.split('\n')[0] + '\n';
               }
             });
 
-            content += `\n## Completadas (${completados.length})\n\n`;
+            content += '\n## Completadas (' + completados.length + ')\n\n';
 
             completados.forEach(issue => {
-              content += `- [x] **#${issue.number}** - ${issue.title}\n`;
+              content += '- [x] **#' + issue.number + '** - ' + issue.title + '\n';
             });
 
-            content += `\n---\n\n## Instrucciones
+            content += '\n---\n\n## Instrucciones\n\n';
+            content += '1. **Agregar nueva especificación:** Crear issue con label `spec`\n';
+            content += '2. **Marcar como completada:** Cerrar el issue\n';
+            content += '3. **Este documento se actualiza automáticamente**\n';
 
-1. **Agregar nueva especificación:** Crear issue con label \`spec\`
-2. **Marcar como completada:** Cerrar el issue
-3. **Este documento se actualiza automáticamente**
-
-`;
-
-            // Escribir archivo
             fs.writeFileSync('ESPECIFICACIONES.md', content);
-            console.log('✅ ESPECIFICACIONES.md actualizado');
+            console.log('ESPECIFICACIONES.md actualizado');
 
       - name: Commit y push
         run: |
