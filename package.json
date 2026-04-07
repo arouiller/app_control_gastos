@@ -4,7 +4,7 @@
   "description": "App de control de gastos - monorepo",
   "scripts": {
     "install:all": "npm install --prefix backend && npm install --prefix frontend",
-    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
+    "build": "(cd backend && npm install) && (cd frontend && npm install && npm run build)",
     "build:frontend": "npm run build --prefix frontend",
     "start": "node backend/src/server.js"
   },
