@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { User, Session } = require('../models');
 const { success, created, error } = require('../utils/response');
+const { seedDefaultCategories } = require('./categoryController');
 
 const generateTokens = (userId) => {
   const accessToken = jwt.sign(
@@ -34,6 +35,9 @@ const register = async (req, res, next) => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
     await Session.create({ user_id: user.id, refresh_token: refreshToken, expires_at: expiresAt });
+
+    // Crear categorías predeterminadas para el nuevo usuario
+    await seedDefaultCategories(user.id);
 
     return res.status(201).json({
       success: true,

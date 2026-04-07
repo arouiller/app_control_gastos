@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { FiDownload } from 'react-icons/fi'
 import { analyticsService } from '../services/analyticsService'
 import Card, { CardTitle } from '../components/UI/Card'
 import Button from '../components/UI/Button'

@@ -1,5 +1,5 @@
 const { Op, fn, col, literal } = require('sequelize');
-const { sequelize, Expense, Category, Installment } = require('../models');
+const { Expense, Category, Installment } = require('../models');
 const { success } = require('../utils/response');
 const { startOfMonth, endOfMonth, format } = require('../utils/dateHelpers');
 
