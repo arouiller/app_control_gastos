@@ -1,0 +1,223 @@
+import { useEffect, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useDispatch, useSelector } from 'react-redux'
+import { useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
+import { createExpense, createInstallmentExpense, updateExpense } from '../store/expensesSlice'
+import { fetchCategories } from '../store/categoriesSlice'
+import { expenseService } from '../services/expenseService'
+import Input from '../components/UI/Input'
+import Select from '../components/UI/Select'
+import Button from '../components/UI/Button'
+import { PageLoader } from '../components/UI/LoadingSpinner'
+import { today } from '../utils/formatters'
+import { PAYMENT_METHODS } from '../utils/constants'
+
+const baseSchema = z.object({
+  description: z.string().min(1, 'La descripción es requerida'),
+  amount: z.string().refine((v) => !isNaN(v) && parseFloat(v) > 0, 'El monto debe ser mayor a 0'),
+  date: z.string().min(1, 'La fecha es requerida'),
+  categoryId: z.string().min(1, 'La categoría es requerida'),
+  paymentMethod: z.enum(['cash', 'credit_card']),
+  notes: z.string().optional(),
+  isInstallment: z.boolean().optional(),
+  numberOfInstallments: z.string().optional(),
+})
+
+export default function ExpenseForm() {
+  const dispatch = useDispatch()
+  const navigate = useNavigate()
+  const { id } = useParams()
+  const isEditing = Boolean(id)
+
+  const { items: categories } = useSelector((state) => state.categories)
+  const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(isEditing)
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
+    resolver: zodResolver(baseSchema),
+    defaultValues: {
+      date: today(),
+      paymentMethod: 'cash',
+      isInstallment: false,
+    },
+  })
+
+  const paymentMethod = watch('paymentMethod')
+  const isInstallment = watch('isInstallment')
+
+  useEffect(() => {
+    dispatch(fetchCategories())
+  }, [dispatch])
+
+  useEffect(() => {
+    if (!isEditing) return
+    const loadExpense = async () => {
+      try {
+        const res = await expenseService.getById(id)
+        const e = res.data
+        setValue('description', e.description)
+        setValue('amount', String(e.amount))
+        setValue('date', e.date)
+        setValue('categoryId', String(e.category_id))
+        setValue('paymentMethod', e.payment_method)
+        setValue('notes', e.notes || '')
+      } catch {
+        toast.error('No se pudo cargar el gasto')
+        navigate('/expenses')
+      } finally {
+        setInitialLoading(false)
+      }
+    }
+    loadExpense()
+  }, [id, isEditing, navigate, setValue])
+
+  const onSubmit = async (data) => {
+    setLoading(true)
+    try {
+      const payload = {
+        description: data.description,
+        amount: parseFloat(data.amount),
+        date: data.date,
+        categoryId: parseInt(data.categoryId),
+        paymentMethod: data.paymentMethod,
+        notes: data.notes,
+      }
+
+      if (isEditing) {
+        await dispatch(updateExpense({ id, data: payload })).unwrap()
+        toast.success('Gasto actualizado')
+      } else if (data.isInstallment && data.numberOfInstallments) {
+        await dispatch(createInstallmentExpense({
+          ...payload,
+          numberOfInstallments: parseInt(data.numberOfInstallments),
+        })).unwrap()
+        toast.success('Gasto en cuotas registrado')
+      } else {
+        await dispatch(createExpense(payload)).unwrap()
+        toast.success('Gasto registrado')
+      }
+      navigate('/expenses')
+    } catch (err) {
+      toast.error(err || 'Error al guardar gasto')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (initialLoading) return <PageLoader />
+
+  const categoryOptions = categories.map((c) => ({ value: String(c.id), label: c.name }))
+
+  return (
+    <div className="max-w-lg mx-auto">
+      <h1 className="text-2xl font-bold text-primary mb-6">
+        {isEditing ? 'Editar Gasto' : 'Nuevo Gasto'}
+      </h1>
+
+      <div className="bg-white rounded-lg border border-neutral shadow-card p-6">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+          <Input
+            label="Descripción"
+            placeholder="Ej: Pizza para la oficina"
+            required
+            error={errors.description?.message}
+            {...register('description')}
+          />
+
+          <Input
+            label="Monto"
+            type="number"
+            step="0.01"
+            min="0.01"
+            placeholder="0.00"
+            required
+            error={errors.amount?.message}
+            className="font-mono"
+            {...register('amount')}
+          />
+
+          <Select
+            label="Categoría"
+            options={categoryOptions}
+            placeholder="Seleccionar categoría"
+            required
+            error={errors.categoryId?.message}
+            {...register('categoryId')}
+          />
+
+          <Input
+            label="Fecha"
+            type="date"
+            required
+            error={errors.date?.message}
+            {...register('date')}
+          />
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-primary">
+              Método de Pago <span className="text-danger">*</span>
+            </label>
+            <div className="flex gap-4">
+              {PAYMENT_METHODS.map((m) => (
+                <label key={m.value} className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" value={m.value} {...register('paymentMethod')} className="text-secondary" />
+                  <span className="text-sm">{m.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {!isEditing && paymentMethod === 'credit_card' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-primary">¿En cuotas?</label>
+              <div className="flex gap-4">
+                {[{ v: false, l: 'No' }, { v: true, l: 'Sí' }].map(({ v, l }) => (
+                  <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={isInstallment === v}
+                      onChange={() => setValue('isInstallment', v)}
+                      className="text-secondary"
+                    />
+                    <span className="text-sm">{l}</span>
+                  </label>
+                ))}
+              </div>
+
+              {isInstallment && (
+                <Input
+                  label="Número de cuotas"
+                  type="number"
+                  min="2"
+                  max="24"
+                  placeholder="Ej: 12"
+                  error={errors.numberOfInstallments?.message}
+                  {...register('numberOfInstallments')}
+                />
+              )}
+            </div>
+          )}
+
+          <Input
+            label="Notas"
+            placeholder="Observaciones opcionales"
+            error={errors.notes?.message}
+            {...register('notes')}
+          />
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={() => navigate('/expenses')}>
+              Cancelar
+            </Button>
+            <Button type="submit" loading={loading} fullWidth>
+              {isEditing ? 'Actualizar' : 'Guardar'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
