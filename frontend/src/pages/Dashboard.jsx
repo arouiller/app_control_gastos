@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiTrendingUp, FiTrendingDown, FiDollarSign, FiCreditCard, FiPlus, FiChevronUp, FiChevronDown } from 'react-icons/fi'
+import { FiTrendingUp, FiTrendingDown, FiDollarSign, FiCreditCard, FiPlus, FiChevronUp, FiChevronDown, FiX } from 'react-icons/fi'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { analyticsService } from '../services/analyticsService'
 import { expenseService } from '../services/expenseService'
@@ -13,9 +13,9 @@ import { formatCurrency, formatDate, startOfCurrentMonth, endOfCurrentMonth } fr
 import { getDisplayAmount } from '../utils/currencyHelpers'
 import { PAYMENT_METHOD_LABELS } from '../utils/constants'
 
-// ─── Custom pie label rendered as SVG text ────────────────────────────────────
+// ─── Custom pie label ─────────────────────────────────────────────────────────
 const RADIAN = Math.PI / 180
-function PieLabel({ cx, cy, midAngle, outerRadius, percent, value, name }) {
+function PieLabel({ cx, cy, midAngle, outerRadius, percent, value }) {
   if (percent < 0.04) return null
   const radius = outerRadius + 38
   const x = cx + radius * Math.cos(-midAngle * RADIAN)
@@ -33,41 +33,47 @@ function PieLabel({ cx, cy, midAngle, outerRadius, percent, value, name }) {
   )
 }
 
-// ─── Sortable detail table ─────────────────────────────────────────────────────
-function SortIcon({ field, sort }) {
-  if (sort.field !== field) return <FiChevronDown size={12} className="opacity-30" />
-  return sort.dir === 'asc' ? <FiChevronUp size={12} /> : <FiChevronDown size={12} />
-}
-
-function DetailTable({ expenses, sort, onSort, displayCurrency, showCategory }) {
-  const sorted = [...expenses].sort((a, b) => {
-    let av, bv
-    if (sort.field === 'date') { av = a.date; bv = b.date }
-    else if (sort.field === 'amount') { av = getDisplayAmount(a, displayCurrency) || 0; bv = getDisplayAmount(b, displayCurrency) || 0 }
-    else if (sort.field === 'description') { av = a.description?.toLowerCase(); bv = b.description?.toLowerCase() }
-    else if (sort.field === 'category') { av = a.category?.name?.toLowerCase(); bv = b.category?.name?.toLowerCase() }
-    else if (sort.field === 'method') { av = a.payment_method; bv = b.payment_method }
-    if (av < bv) return sort.dir === 'asc' ? -1 : 1
-    if (av > bv) return sort.dir === 'asc' ? 1 : -1
-    return 0
-  })
-
-  const th = (label, field) => (
+// ─── Sortable column header ───────────────────────────────────────────────────
+function SortTh({ label, field, sort, onSort }) {
+  const active = sort.field === field
+  return (
     <th
       onClick={() => onSort(field)}
       className="text-left text-xs font-semibold text-neutral-darker px-3 py-2 cursor-pointer select-none hover:text-primary whitespace-nowrap"
     >
-      <span className="flex items-center gap-1">{label}<SortIcon field={field} sort={sort} /></span>
+      <span className="flex items-center gap-1">
+        {label}
+        {active
+          ? (sort.dir === 'asc' ? <FiChevronUp size={12} /> : <FiChevronDown size={12} />)
+          : <FiChevronDown size={12} className="opacity-30" />}
+      </span>
     </th>
   )
+}
+
+// ─── Shared detail table ──────────────────────────────────────────────────────
+function DetailTable({ expenses, sort, onSort, displayCurrency, showCategory }) {
+  const sorted = [...expenses].sort((a, b) => {
+    let av, bv
+    if (sort.field === 'date')        { av = a.date;                           bv = b.date }
+    else if (sort.field === 'amount') { av = getDisplayAmount(a, displayCurrency) || 0; bv = getDisplayAmount(b, displayCurrency) || 0 }
+    else if (sort.field === 'desc')   { av = a.description?.toLowerCase();     bv = b.description?.toLowerCase() }
+    else if (sort.field === 'cat')    { av = a.category?.name?.toLowerCase();  bv = b.category?.name?.toLowerCase() }
+    else if (sort.field === 'method') { av = a.payment_method;                 bv = b.payment_method }
+    if (av < bv) return sort.dir === 'asc' ? -1 : 1
+    if (av > bv) return sort.dir === 'asc' ?  1 : -1
+    return 0
+  })
+
+  const th = (label, field) => <SortTh label={label} field={field} sort={sort} onSort={onSort} />
 
   return (
-    <div className="overflow-x-auto mt-3 rounded border border-neutral">
+    <div className="overflow-x-auto rounded border border-neutral">
       <table className="w-full text-sm">
         <thead className="bg-gray-50 border-b border-neutral">
           <tr>
-            {th('Descripción', 'description')}
-            {showCategory ? th('Categoría', 'category') : th('Método', 'method')}
+            {th('Descripción', 'desc')}
+            {showCategory ? th('Categoría', 'cat') : th('Método', 'method')}
             {th('Fecha', 'date')}
             {th('Monto', 'amount')}
           </tr>
@@ -78,25 +84,28 @@ function DetailTable({ expenses, sort, onSort, displayCurrency, showCategory }) 
               <td className="px-3 py-2">
                 <span className="font-medium text-primary">{e.description}</span>
                 {!!e.is_installment && !!e.installment_number && (
-                  <span className="ml-1 text-xs text-neutral-darker">({e.installment_number}/{e.total_installments})</span>
+                  <span className="ml-1 text-xs text-neutral-darker">
+                    ({e.installment_number}/{e.total_installments})
+                  </span>
                 )}
               </td>
-              <td className="px-3 py-2 text-neutral-darker">
-                {showCategory
-                  ? <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.category?.color || '#ccc' }} />
-                      {e.category?.name}
-                    </span>
-                  : <Badge variant={e.payment_method === 'cash' ? 'success' : 'info'} className="text-xs">
-                      {PAYMENT_METHOD_LABELS[e.payment_method]}
-                    </Badge>
-                }
+              <td className="px-3 py-2">
+                {showCategory ? (
+                  <span className="flex items-center gap-1 text-neutral-darker">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.category?.color || '#ccc' }} />
+                    {e.category?.name}
+                  </span>
+                ) : (
+                  <Badge variant={e.payment_method === 'cash' ? 'success' : 'info'} className="text-xs">
+                    {PAYMENT_METHOD_LABELS[e.payment_method]}
+                  </Badge>
+                )}
               </td>
               <td className="px-3 py-2 text-neutral-darker whitespace-nowrap">{formatDate(e.date)}</td>
               <td className="px-3 py-2 text-right font-mono font-semibold text-primary whitespace-nowrap">
                 {formatCurrency(getDisplayAmount(e, displayCurrency))}
                 {displayCurrency !== 'original' && (
-                  <span className="block text-xs text-neutral-darker font-normal">
+                  <span className="block text-xs font-normal text-neutral-darker">
                     {formatCurrency(e.original_amount)} {e.original_currency}
                   </span>
                 )}
@@ -140,17 +149,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [displayCurrency, setDisplayCurrency] = useState('original')
 
-  // Detail table state – category
-  const [catSelected, setCatSelected] = useState(null)
-  const [catExpenses, setCatExpenses] = useState([])
-  const [catLoading, setCatLoading] = useState(false)
-  const [catSort, setCatSort] = useState({ field: 'date', dir: 'desc' })
-
-  // Detail table state – cash vs card
-  const [cvcSelected, setCvcSelected] = useState(null)
-  const [cvcExpenses, setCvcExpenses] = useState([])
-  const [cvcLoading, setCvcLoading] = useState(false)
-  const [cvcSort, setCvcSort] = useState({ field: 'date', dir: 'desc' })
+  // Shared detail table state
+  const [selected, setSelected] = useState(null)   // { type: 'category'|'cvc', label, color?, method?, categoryId? }
+  const [detailExpenses, setDetailExpenses] = useState([])
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailSort, setDetailSort] = useState({ field: 'date', dir: 'desc' })
 
   const getDataByCurrency = (data, currency) => {
     if (!data) return null
@@ -178,30 +181,45 @@ export default function Dashboard() {
     load()
   }, [])
 
-  const fetchCategoryDetail = useCallback(async (categoryId, categoryName, color) => {
-    if (catSelected?.categoryId === categoryId) { setCatSelected(null); setCatExpenses([]); return }
-    setCatSelected({ categoryId, categoryName, color })
-    setCatLoading(true)
+  const handleSliceClick = useCallback(async (sliceMeta, apiParams) => {
+    // Toggle off if same slice clicked again
+    if (selected?.key === sliceMeta.key) {
+      setSelected(null)
+      setDetailExpenses([])
+      return
+    }
+    setSelected(sliceMeta)
+    setDetailExpenses([])
+    setDetailLoading(true)
     try {
-      const res = await expenseService.getAll({ categoryId, startDate: startOfCurrentMonth(), endDate: endOfCurrentMonth(), limit: 200 })
-      setCatExpenses(res.data || [])
-    } catch { setCatExpenses([]) }
-    finally { setCatLoading(false) }
-  }, [catSelected])
+      const res = await expenseService.getAll({
+        ...apiParams,
+        startDate: startOfCurrentMonth(),
+        endDate: endOfCurrentMonth(),
+        limit: 200,
+      })
+      setDetailExpenses(res.data || [])
+    } catch {
+      setDetailExpenses([])
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [selected])
 
-  const fetchCvcDetail = useCallback(async (paymentMethod, name) => {
-    if (cvcSelected?.paymentMethod === paymentMethod) { setCvcSelected(null); setCvcExpenses([]); return }
-    setCvcSelected({ paymentMethod, name })
-    setCvcLoading(true)
-    try {
-      const res = await expenseService.getAll({ paymentMethod, startDate: startOfCurrentMonth(), endDate: endOfCurrentMonth(), limit: 200 })
-      setCvcExpenses(res.data || [])
-    } catch { setCvcExpenses([]) }
-    finally { setCvcLoading(false) }
-  }, [cvcSelected])
+  const handleCatClick = (data) =>
+    handleSliceClick(
+      { key: `cat-${data.categoryId}`, type: 'category', label: data.categoryName, color: data.color },
+      { categoryId: data.categoryId }
+    )
 
-  const toggleSort = (setSort) => (field) =>
-    setSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
+  const handleCvcClick = (data) =>
+    handleSliceClick(
+      { key: `cvc-${data.method}`, type: 'cvc', label: data.name, method: data.method },
+      { paymentMethod: data.method }
+    )
+
+  const handleSortDetail = (field) =>
+    setDetailSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
 
   if (loading) return <PageLoader />
 
@@ -212,14 +230,17 @@ export default function Dashboard() {
 
   const cashTotal = cashVsCard?.summary.cashTotal || 0
   const cardTotal = cashVsCard?.summary.cardTotal || 0
-  const cvcTotal = cashTotal + cardTotal
-  const cashVsCardData = cvcTotal > 0 ? [
-    { name: 'Efectivo', value: cashTotal, pct: cvcTotal > 0 ? cashTotal / cvcTotal : 0, color: '#10B981', method: 'cash' },
-    { name: 'Tarjeta', value: cardTotal, pct: cvcTotal > 0 ? cardTotal / cvcTotal : 0, color: '#3B82F6', method: 'credit_card' },
+  const cvcGrand = cashTotal + cardTotal
+  const cashVsCardData = cvcGrand > 0 ? [
+    { name: 'Efectivo', value: cashTotal, color: '#10B981', method: 'cash' },
+    { name: 'Tarjeta',  value: cardTotal, color: '#3B82F6', method: 'credit_card' },
   ] : []
+
+  const isActive = (key) => selected?.key === key
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
         <div className="flex gap-2 items-end">
@@ -228,81 +249,61 @@ export default function Dashboard() {
               label="Mostrar en"
               options={[
                 { value: 'original', label: 'Moneda original' },
-                { value: 'ARS', label: 'Pesos (ARS)' },
-                { value: 'USD', label: 'Dólares (USD)' },
+                { value: 'ARS',      label: 'Pesos (ARS)' },
+                { value: 'USD',      label: 'Dólares (USD)' },
               ]}
               value={displayCurrency}
               onChange={(e) => setDisplayCurrency(e.target.value)}
             />
           </div>
           <Button onClick={() => navigate('/expenses/new')} size="sm">
-            <FiPlus size={16} />
-            Nuevo Gasto
+            <FiPlus size={16} /> Nuevo Gasto
           </Button>
         </div>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard title="Gasto Total del Mes" value={formatCurrency(summary?.totalExpenses || 0)} subtitle={`${summary?.totalTransactions || 0} transacciones`} icon={FiDollarSign} trend={summary?.comparisonWithPreviousMonth?.percentageChange} />
-        <SummaryCard title="Promedio Diario" value={formatCurrency(summary?.averageDaily || 0)} icon={FiTrendingUp} />
-        <SummaryCard title="Total Efectivo" value={formatCurrency(summary?.cashTotal || 0)} subtitle={`${summary?.cashPercentage || 0}% del total`} icon={FiDollarSign} color="text-success" />
-        <SummaryCard title="Total Tarjeta" value={formatCurrency(summary?.cardTotal || 0)} subtitle={`${summary?.cardPercentage || 0}% del total`} icon={FiCreditCard} color="text-secondary" />
+        <SummaryCard title="Gasto Total del Mes"  value={formatCurrency(summary?.totalExpenses || 0)} subtitle={`${summary?.totalTransactions || 0} transacciones`} icon={FiDollarSign} trend={summary?.comparisonWithPreviousMonth?.percentageChange} />
+        <SummaryCard title="Promedio Diario"       value={formatCurrency(summary?.averageDaily || 0)} icon={FiTrendingUp} />
+        <SummaryCard title="Total Efectivo"        value={formatCurrency(summary?.cashTotal || 0)} subtitle={`${summary?.cashPercentage || 0}% del total`} icon={FiDollarSign} color="text-success" />
+        <SummaryCard title="Total Tarjeta"         value={formatCurrency(summary?.cardTotal || 0)} subtitle={`${summary?.cardPercentage || 0}% del total`} icon={FiCreditCard} color="text-secondary" />
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
         {/* Categories pie */}
         <Card>
           <CardTitle className="mb-1">Gastos por Categoría</CardTitle>
           <p className="text-xs text-neutral-darker mb-3">Clic en una porción para ver el detalle</p>
           {byCategory.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie
-                    data={byCategory}
-                    dataKey="totalAmount"
-                    nameKey="categoryName"
-                    cx="50%" cy="50%"
-                    outerRadius={75}
-                    labelLine
-                    label={PieLabel}
-                    onClick={(data) => fetchCategoryDetail(data.categoryId, data.categoryName, data.color)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {byCategory.map((entry, i) => (
-                      <Cell
-                        key={i}
-                        fill={entry.color || '#3B82F6'}
-                        stroke={catSelected?.categoryId === entry.categoryId ? '#1F2937' : 'white'}
-                        strokeWidth={catSelected?.categoryId === entry.categoryId ? 2 : 1}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v) => formatCurrency(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-
-              {catSelected && (
-                <div className="mt-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: catSelected.color }} />
-                    <span className="text-sm font-semibold text-primary">{catSelected.categoryName}</span>
-                    <button onClick={() => { setCatSelected(null); setCatExpenses([]) }} className="ml-auto text-xs text-neutral-darker hover:text-primary">✕ cerrar</button>
-                  </div>
-                  {catLoading
-                    ? <p className="text-xs text-neutral-darker py-3 text-center">Cargando...</p>
-                    : catExpenses.length === 0
-                      ? <p className="text-xs text-neutral-darker py-3 text-center">Sin gastos</p>
-                      : <DetailTable expenses={catExpenses} sort={catSort} onSort={toggleSort(setCatSort)} displayCurrency={displayCurrency} showCategory={false} />
-                  }
-                </div>
-              )}
-            </>
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={byCategory}
+                  dataKey="totalAmount"
+                  nameKey="categoryName"
+                  cx="50%" cy="50%"
+                  outerRadius={75}
+                  labelLine
+                  label={PieLabel}
+                  onClick={handleCatClick}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {byCategory.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={entry.color || '#3B82F6'}
+                      stroke={isActive(`cat-${entry.categoryId}`) ? '#111827' : 'white'}
+                      strokeWidth={isActive(`cat-${entry.categoryId}`) ? 3 : 1}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => formatCurrency(v)} />
+              </PieChart>
+            </ResponsiveContainer>
           ) : (
-            <p className="text-sm text-neutral-darker text-center py-12">Sin gastos este mes</p>
+            <p className="text-sm text-neutral-darker text-center py-16">Sin gastos este mes</p>
           )}
         </Card>
 
@@ -311,55 +312,90 @@ export default function Dashboard() {
           <CardTitle className="mb-1">Efectivo vs Tarjeta</CardTitle>
           <p className="text-xs text-neutral-darker mb-3">Clic en una porción para ver el detalle</p>
           {cashVsCardData.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie
-                    data={cashVsCardData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%" cy="50%"
-                    outerRadius={75}
-                    labelLine
-                    label={({ cx, cy, midAngle, outerRadius, percent, value, name }) =>
-                      <PieLabel cx={cx} cy={cy} midAngle={midAngle} outerRadius={outerRadius} percent={percent} value={value} name={name} />
-                    }
-                    onClick={(data) => fetchCvcDetail(data.method, data.name)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {cashVsCardData.map((entry, i) => (
-                      <Cell
-                        key={i}
-                        fill={entry.color}
-                        stroke={cvcSelected?.paymentMethod === entry.method ? '#1F2937' : 'white'}
-                        strokeWidth={cvcSelected?.paymentMethod === entry.method ? 2 : 1}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v) => formatCurrency(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-
-              {cvcSelected && (
-                <div className="mt-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant={cvcSelected.paymentMethod === 'cash' ? 'success' : 'info'}>{cvcSelected.name}</Badge>
-                    <button onClick={() => { setCvcSelected(null); setCvcExpenses([]) }} className="ml-auto text-xs text-neutral-darker hover:text-primary">✕ cerrar</button>
-                  </div>
-                  {cvcLoading
-                    ? <p className="text-xs text-neutral-darker py-3 text-center">Cargando...</p>
-                    : cvcExpenses.length === 0
-                      ? <p className="text-xs text-neutral-darker py-3 text-center">Sin gastos</p>
-                      : <DetailTable expenses={cvcExpenses} sort={cvcSort} onSort={toggleSort(setCvcSort)} displayCurrency={displayCurrency} showCategory />
-                  }
-                </div>
-              )}
-            </>
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={cashVsCardData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%" cy="50%"
+                  outerRadius={75}
+                  labelLine
+                  label={PieLabel}
+                  onClick={handleCvcClick}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {cashVsCardData.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={entry.color}
+                      stroke={isActive(`cvc-${entry.method}`) ? '#111827' : 'white'}
+                      strokeWidth={isActive(`cvc-${entry.method}`) ? 3 : 1}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => formatCurrency(v)} />
+              </PieChart>
+            </ResponsiveContainer>
           ) : (
-            <p className="text-sm text-neutral-darker text-center py-12">Sin gastos este mes</p>
+            <p className="text-sm text-neutral-darker text-center py-16">Sin gastos este mes</p>
           )}
         </Card>
       </div>
+
+      {/* Shared detail table */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <CardTitle>
+              {selected
+                ? `Detalle — ${selected.label}`
+                : 'Detalle de gastos'}
+            </CardTitle>
+            {!selected && (
+              <p className="text-xs text-neutral-darker mt-1">
+                Hacé clic en una porción de cualquiera de los gráficos para ver el detalle aquí
+              </p>
+            )}
+          </div>
+          {selected && (
+            <button
+              onClick={() => { setSelected(null); setDetailExpenses([]) }}
+              className="p-1.5 text-neutral-darker hover:text-primary rounded transition-colors"
+              title="Cerrar detalle"
+            >
+              <FiX size={16} />
+            </button>
+          )}
+        </div>
+
+        {!selected && (
+          <div className="flex items-center justify-center py-10 text-neutral-darker">
+            <p className="text-sm">Sin selección</p>
+          </div>
+        )}
+
+        {selected && detailLoading && (
+          <p className="text-sm text-neutral-darker text-center py-8">Cargando...</p>
+        )}
+
+        {selected && !detailLoading && detailExpenses.length === 0 && (
+          <p className="text-sm text-neutral-darker text-center py-8">Sin gastos para esta selección</p>
+        )}
+
+        {selected && !detailLoading && detailExpenses.length > 0 && (
+          <>
+            <p className="text-xs text-neutral-darker mb-3">{detailExpenses.length} gasto{detailExpenses.length !== 1 ? 's' : ''}</p>
+            <DetailTable
+              expenses={detailExpenses}
+              sort={detailSort}
+              onSort={handleSortDetail}
+              displayCurrency={displayCurrency}
+              showCategory={selected.type === 'cvc'}
+            />
+          </>
+        )}
+      </Card>
 
       {/* Pending installments */}
       {pendingInstallments.totalPending > 0 && (
