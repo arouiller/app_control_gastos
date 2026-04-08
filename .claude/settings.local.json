@@ -8,7 +8,13 @@
       "Bash(cmd.exe /c \"node --version && npm --version\")",
       "Bash(cmd.exe /c \"where node && where npm\")",
       "Bash(cmd.exe /c \"where node\")",
-      "Bash(powershell.exe -Command \"Get-Command node,npm -ErrorAction SilentlyContinue | Select-Object Name,Source\")"
+      "Bash(powershell.exe -Command \"Get-Command node,npm -ErrorAction SilentlyContinue | Select-Object Name,Source\")",
+      "WebFetch(domain:principales-variables.bcra.apidocs.ar)",
+      "WebFetch(domain:www.bcra.gob.ar)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:estadisticasbcra.com)",
+      "WebFetch(domain:bcra-connector.readthedocs.io)"
     ]
   }
 }
