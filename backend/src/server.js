@@ -9,8 +9,7 @@ const { sequelize } = require('./models');
 const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
-const { checkAndMigrate } = require('./migrations/migrationEngine');
-const { versionCheckMiddleware, setMigrationStatus } = require('./migrations/versionCheck');
+const { versionCheckMiddleware } = require('./migrations/versionCheck');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -81,19 +80,9 @@ async function startServer() {
     process.exit(1);
   }
 
-  // El servidor escucha primero; el middleware bloquea requests hasta que las
-  // migraciones terminen. Esto evita el problema con PM2 cluster y deploys lentos.
   app.listen(PORT, () => {
     logger.info(`Servidor corriendo en puerto ${PORT}`);
   });
-
-  try {
-    await checkAndMigrate();
-    setMigrationStatus('ok');
-  } catch (err) {
-    logger.error('[Migraciones] Error crítico en migración:', err);
-    setMigrationStatus('error', err);
-  }
 }
 
 if (require.main === module) {
