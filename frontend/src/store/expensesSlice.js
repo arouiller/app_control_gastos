@@ -55,6 +55,8 @@ const expensesSlice = createSlice({
       categoryId: '',
       paymentMethod: '',
       search: '',
+      currency: '',
+      displayCurrency: 'original',
     },
   },
   reducers: {
@@ -62,7 +64,7 @@ const expensesSlice = createSlice({
       state.filters = { ...state.filters, ...action.payload }
     },
     clearFilters: (state) => {
-      state.filters = { startDate: '', endDate: '', categoryId: '', paymentMethod: '', search: '' }
+      state.filters = { startDate: '', endDate: '', categoryId: '', paymentMethod: '', search: '', currency: '', displayCurrency: 'original' }
     },
     clearError: (state) => { state.error = null },
   },

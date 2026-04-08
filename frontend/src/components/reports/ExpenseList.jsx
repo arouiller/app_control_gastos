@@ -73,6 +73,7 @@ export default function ExpenseList({ expenses, onEdit, onDelete }) {
               >
                 Monto <SortIcon field="amount" />
               </th>
+              <th className="text-right text-xs font-semibold text-neutral-darker pb-2 pr-3 hidden sm:table-cell">Moneda</th>
               <th
                 className="text-right text-xs font-semibold text-neutral-darker pb-2 pr-3 cursor-pointer hover:text-primary select-none"
                 onClick={() => toggleSort('date')}
@@ -93,7 +94,19 @@ export default function ExpenseList({ expenses, onEdit, onDelete }) {
                   )}
                 </td>
                 <td className="py-2 pr-3 text-right font-mono font-medium text-primary">
-                  {formatCurrency(expense.amount)}
+                  <div>
+                    <span>
+                      {formatCurrency(expense.converted_amount ?? expense.amount)}
+                    </span>
+                    {expense.converted_amount && (
+                      <span className="text-xs text-neutral-darker block">
+                        (orig: {formatCurrency(expense.amount)})
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="py-2 pr-3 text-right text-neutral-darker hidden sm:table-cell text-xs font-medium">
+                  {expense.currency || 'ARS'}
                 </td>
                 <td className="py-2 pr-3 text-right text-neutral-darker">
                   {formatDate(expense.date)}

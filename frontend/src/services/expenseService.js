@@ -25,4 +25,8 @@ export const expenseService = {
     const { data } = await api.delete(`/expenses/${id}`)
     return data
   },
+  convert: async (params = {}) => {
+    const { data } = await api.get('/expenses/convert', { params })
+    return data
+  },
 }
