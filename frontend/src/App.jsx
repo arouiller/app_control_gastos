@@ -8,6 +8,7 @@ import Expenses from './pages/Expenses'
 import ExpenseForm from './pages/ExpenseForm'
 import Installments from './pages/Installments'
 import Reports from './pages/Reports'
+import ReportMonthlyGrouping from './pages/reports/ReportMonthlyGrouping'
 import Categories from './pages/Categories'
 import Profile from './pages/Profile'
 
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="expenses/:id/edit" element={<ExpenseForm />} />
         <Route path="installments" element={<Installments />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="reports/monthly-grouping" element={<ReportMonthlyGrouping />} />
         <Route path="categories" element={<Categories />} />
         <Route path="profile" element={<Profile />} />
       </Route>
