@@ -19,7 +19,8 @@ const getSummary = async (req, res, next) => {
     const expenses = await sequelize.query(
       `SELECT original_amount, amount_in_ars, amount_in_usd, payment_method
        FROM expenses_with_conversions
-       WHERE user_id = ? AND expense_date BETWEEN ? AND ?`,
+       WHERE user_id = ? AND expense_date BETWEEN ? AND ?
+         AND (is_installment = FALSE OR installment_group_id IS NOT NULL)`,
       { replacements: [req.user.id, start, end], type: sequelize.QueryTypes.SELECT }
     );
 
@@ -49,7 +50,8 @@ const getSummary = async (req, res, next) => {
     const prevExpenses = await sequelize.query(
       `SELECT original_amount, amount_in_ars, amount_in_usd
        FROM expenses_with_conversions
-       WHERE user_id = ? AND expense_date BETWEEN ? AND ?`,
+       WHERE user_id = ? AND expense_date BETWEEN ? AND ?
+         AND (is_installment = FALSE OR installment_group_id IS NOT NULL)`,
       { replacements: [req.user.id, format(prevStart), format(prevEnd)], type: sequelize.QueryTypes.SELECT }
     );
 
@@ -127,6 +129,7 @@ const getByCategory = async (req, res, next) => {
       FROM expenses_with_conversions ewc
       LEFT JOIN categories c ON ewc.category_id = c.id
       WHERE ewc.user_id = ? AND ewc.expense_date BETWEEN ? AND ?
+        AND (ewc.is_installment = FALSE OR ewc.installment_group_id IS NOT NULL)
       GROUP BY ewc.category_id, c.id, c.name, c.color
       ORDER BY total_original DESC`,
       { replacements: [req.user.id, start, end], type: sequelize.QueryTypes.SELECT }
@@ -181,6 +184,7 @@ const getCashVsCard = async (req, res, next) => {
       `SELECT expense_date as date, original_amount, amount_in_ars, amount_in_usd, payment_method
        FROM expenses_with_conversions
        WHERE user_id = ? AND expense_date BETWEEN ? AND ?
+         AND (is_installment = FALSE OR installment_group_id IS NOT NULL)
        ORDER BY expense_date ASC`,
       { replacements: [req.user.id, start, end], type: sequelize.QueryTypes.SELECT }
     );
