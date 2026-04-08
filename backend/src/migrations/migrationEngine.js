@@ -84,10 +84,50 @@ function getSqlFilesForVersion(version, direction) {
     .map((f) => path.join(dirPath, f));
 }
 
+/**
+ * Divide el contenido de un archivo SQL en statements individuales.
+ * Respeta bloques BEGIN...END (para triggers/procedures).
+ */
+function splitSqlStatements(sql) {
+  // Eliminar comentarios de bloque
+  sql = sql.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  const statements = [];
+  let current = '';
+  let depth = 0;
+
+  for (const line of sql.split('\n')) {
+    const upper = line.trim().toUpperCase();
+    const withoutComment = line.replace(/--.*$/, '').trim();
+
+    // Rastrear profundidad de bloques BEGIN...END
+    if (/\bBEGIN\b/.test(upper) && !/\bEND\b/.test(upper)) depth++;
+    if (/\bEND\b/.test(upper) && !/\bBEGIN\b/.test(upper)) depth = Math.max(0, depth - 1);
+
+    current += line + '\n';
+
+    // Separar en profundidad 0 cuando la línea termina con ;
+    if (depth === 0 && withoutComment.endsWith(';')) {
+      const stmt = current.replace(/;\s*$/, '').trim();
+      if (stmt) statements.push(stmt);
+      current = '';
+    }
+  }
+
+  // Último statement sin ; final
+  const remaining = current.trim();
+  if (remaining) statements.push(remaining);
+
+  return statements.filter((s) => s.trim());
+}
+
 async function executeSqlFile(filePath) {
   const sql = fs.readFileSync(filePath, 'utf8').trim();
   if (!sql) return;
-  await sequelize.query(sql);
+  const statements = splitSqlStatements(sql);
+  for (const stmt of statements) {
+    await sequelize.query(stmt);
+  }
 }
 
 async function recordHistory(fromVersion, toVersion, status, errorMessage, timeMs) {

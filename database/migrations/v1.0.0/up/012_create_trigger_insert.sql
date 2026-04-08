@@ -1,4 +1,6 @@
-CREATE TRIGGER IF NOT EXISTS trg_installment_after_insert
+DROP TRIGGER IF EXISTS trg_installment_after_insert;
+
+CREATE TRIGGER trg_installment_after_insert
 AFTER INSERT ON installments
 FOR EACH ROW
 BEGIN
