@@ -23,6 +23,14 @@
       "estimatedTime": "< 1 minuto",
       "breaking": false,
       "notes": "Crea tablas exchange_rates y exchange_rate_logs para historial de cotizaciones diarias"
+    },
+    {
+      "version": "1.0.3",
+      "description": "Gastos en múltiples monedas (ARS/USD)",
+      "releaseDate": "2026-04-08",
+      "estimatedTime": "< 1 minuto",
+      "breaking": false,
+      "notes": "Agrega campo currency a expenses; retrocompatible (default ARS)"
     }
   ]
 }

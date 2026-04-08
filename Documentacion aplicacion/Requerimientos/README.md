@@ -113,12 +113,87 @@ GET /api/reports/monthly-grouping/details
 
 ---
 
+## Requerimientos Completados
+
+### REQ-002: Versionado de BD y Migraciones
+
+**Estado**: En Diseño  
+**Prioridad**: Alta
+
+Sistema de control de versiones y migraciones de base de datos.
+
+**Archivo**: [`REQ_002_VERSIONADO_BD_Y_MIGRACIONES.md`](REQ_002_VERSIONADO_BD_Y_MIGRACIONES.md)
+
+---
+
+### REQ-003: Control de Cotizaciones ARS/USD
+
+**Estado**: En Diseño  
+**Prioridad**: Alta
+
+Mantener histórico de cotizaciones diarias de ARS/USD, obtención automática diaria, carga histórica manual y auditoría.
+
+**Archivo**: [`REQ_003_CONTROL_COTIZACIONES.md`](REQ_003_CONTROL_COTIZACIONES.md)
+
+**Características principales**:
+- ✅ Tabla de cotizaciones diarias con histórico
+- ✅ Obtención automática diaria a las 22:00
+- ✅ Carga histórica manual desde admin panel
+- ✅ Logging y auditoría de todas las operaciones
+- ✅ Fallback a cotización anterior si API falla
+- ✅ Endpoint para consultar logs con filtros
+
+---
+
+### REQ-004: Gastos en Múltiples Monedas (ARS/USD)
+
+**Estado**: En Diseño  
+**Prioridad**: Alta  
+**Estimado**: 8 días de desarrollo
+
+Permitir ingreso de gastos en ARS o USD con conversión automática usando cotizaciones del día. Visualización flexible en cualquier moneda con reportes y gráficos que soportan conversión.
+
+**Archivo**: [`REQ_004_GASTOS_MULTIMONEDA.md`](REQ_004_GASTOS_MULTIMONEDA.md)
+
+**Características principales**:
+- ✅ Campo `currency` en tabla `expenses` (ARS/USD)
+- ✅ Formulario permite seleccionar moneda al ingresar gasto
+- ✅ Conversión ARS ↔ USD usando cotización del día
+- ✅ Listados filtran y visualizan en cualquier moneda
+- ✅ Reportes incluyen opciones de conversión
+- ✅ Gráficos soportan cambio dinámico de moneda
+- ✅ Dashboard muestra totales en ARS y USD
+- ✅ Si no existe cotización exacta, usa siguiente disponible
+
+**Componentes necesarios**:
+```
+Backend:
+  - Campo currency en modelo Expense
+  - Servicio currencyConversionService.js
+  - Endpoint GET /api/expenses/convert
+  - Actualizar controladores de gastos y reportes
+  
+Frontend:
+  - Actualizar ExpenseForm con selector de moneda
+  - Agregar filtro de moneda en listados
+  - Selector "Mostrar en" para conversión de visualización
+  - Actualizar reportes con opciones de conversión
+  - Actualizar gráficos con selector de moneda
+  - Dashboard con totales por moneda
+```
+
+**Dependencias**:
+- Depende de **REQ-003** (tabla de cotizaciones)
+- Integración con **REQ-001** (reportes)
+
+---
+
 ## Próximos Requerimientos (Planeados)
 
-- REQ-002: Exportación de reportes a PDF
-- REQ-003: Presupuestos por categoría
-- REQ-004: Alertas de gastos excesivos
-- REQ-005: Sincronización con cuentas bancarias
+- REQ-005: Exportación de reportes a PDF
+- REQ-006: Presupuestos por categoría
+- REQ-007: Alertas de gastos excesivos
+- REQ-008: Sincronización con cuentas bancarias
 
 ---
 
@@ -133,5 +208,8 @@ GET /api/reports/monthly-grouping/details
 
 ## Cambios en esta Carpeta
 
+- **2026-04-08**: Agregado REQ-004 (Gastos en Múltiples Monedas)
+- **2026-04-08**: Agregado REQ-003 (Control de Cotizaciones)
+- **2026-04-08**: Agregado REQ-002 (Versionado de BD y Migraciones)
 - **2026-04-08**: Creación inicial con REQ-001 (Reporte de Agrupamiento Mensual)
 

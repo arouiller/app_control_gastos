@@ -18,6 +18,7 @@ import { PAYMENT_METHODS } from '../utils/constants'
 const baseSchema = z.object({
   description: z.string().min(1, 'La descripción es requerida'),
   amount: z.string().refine((v) => !isNaN(v) && parseFloat(v) > 0, 'El monto debe ser mayor a 0'),
+  currency: z.enum(['ARS', 'USD']),
   date: z.string().min(1, 'La fecha es requerida'),
   categoryId: z.string().min(1, 'La categoría es requerida'),
   paymentMethod: z.enum(['cash', 'credit_card']),
@@ -42,6 +43,7 @@ export default function ExpenseForm() {
       date: today(),
       paymentMethod: 'cash',
       isInstallment: false,
+      currency: 'ARS',
     },
   })
 
@@ -60,6 +62,7 @@ export default function ExpenseForm() {
         const e = res.data
         setValue('description', e.description)
         setValue('amount', String(e.amount))
+        setValue('currency', e.currency || 'ARS')
         setValue('date', e.date)
         setValue('categoryId', String(e.category_id))
         setValue('paymentMethod', e.payment_method)
@@ -80,6 +83,7 @@ export default function ExpenseForm() {
       const payload = {
         description: data.description,
         amount: parseFloat(data.amount),
+        currency: data.currency,
         date: data.date,
         categoryId: parseInt(data.categoryId),
         paymentMethod: data.paymentMethod,
@@ -127,17 +131,33 @@ export default function ExpenseForm() {
             {...register('description')}
           />
 
-          <Input
-            label="Monto"
-            type="number"
-            step="0.01"
-            min="0.01"
-            placeholder="0.00"
-            required
-            error={errors.amount?.message}
-            className="font-mono"
-            {...register('amount')}
-          />
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Input
+                label="Monto"
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                required
+                error={errors.amount?.message}
+                className="font-mono"
+                {...register('amount')}
+              />
+            </div>
+            <div className="flex-none w-32">
+              <Select
+                label="Moneda"
+                options={[
+                  { value: 'ARS', label: 'Pesos (ARS)' },
+                  { value: 'USD', label: 'Dólares (USD)' },
+                ]}
+                required
+                error={errors.currency?.message}
+                {...register('currency')}
+              />
+            </div>
+          </div>
 
           <Select
             label="Categoría"

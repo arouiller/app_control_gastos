@@ -24,6 +24,11 @@ module.exports = (sequelize) => {
       allowNull: false,
       validate: { min: 0.01 },
     },
+    currency: {
+      type: DataTypes.ENUM('ARS', 'USD'),
+      allowNull: false,
+      defaultValue: 'ARS',
+    },
     date: {
       type: DataTypes.DATEONLY,
       allowNull: false,

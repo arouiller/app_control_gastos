@@ -108,6 +108,26 @@ export default function Expenses() {
               value={filters.paymentMethod}
               onChange={(e) => dispatch(setFilters({ paymentMethod: e.target.value }))}
             />
+            <Select
+              label="Moneda"
+              options={[
+                { value: '', label: 'Ambas' },
+                { value: 'ARS', label: 'Pesos (ARS)' },
+                { value: 'USD', label: 'Dólares (USD)' },
+              ]}
+              value={filters.currency}
+              onChange={(e) => dispatch(setFilters({ currency: e.target.value }))}
+            />
+            <Select
+              label="Mostrar en"
+              options={[
+                { value: 'original', label: 'Moneda original' },
+                { value: 'ARS', label: 'Pesos (ARS)' },
+                { value: 'USD', label: 'Dólares (USD)' },
+              ]}
+              value={filters.displayCurrency}
+              onChange={(e) => dispatch(setFilters({ displayCurrency: e.target.value }))}
+            />
           </div>
           <div className="flex gap-3 mt-3">
             <div className="flex-1">
@@ -149,6 +169,7 @@ export default function Expenses() {
                   <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden md:table-cell">Fecha</th>
                   <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden lg:table-cell">Método</th>
                   <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Monto</th>
+                  <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Moneda</th>
                   <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Acciones</th>
                 </tr>
               </thead>
@@ -179,7 +200,21 @@ export default function Expenses() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold text-sm text-primary">
-                      {formatCurrency(expense.amount)}
+                      <div>
+                        <span>
+                          {formatCurrency(expense.converted_amount ?? expense.amount)}
+                        </span>
+                        {expense.converted_amount && (
+                          <span className="text-xs text-neutral-darker block">
+                            (orig: {formatCurrency(expense.amount)} {expense.currency})
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell text-right">
+                      <Badge variant={expense.currency === 'ARS' ? 'warning' : 'info'}>
+                        {expense.currency}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">

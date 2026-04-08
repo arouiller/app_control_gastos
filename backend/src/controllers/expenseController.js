@@ -2,6 +2,8 @@ const { Op } = require('sequelize');
 const { Expense, Category, Installment } = require('../models');
 const { success, created, error, paginated } = require('../utils/response');
 const { addMonths, format } = require('../utils/dateHelpers');
+const { convertAmount } = require('../services/currencyConversionService');
+const logger = require('../utils/logger');
 
 const listExpenses = async (req, res, next) => {
   try {
@@ -9,6 +11,7 @@ const listExpenses = async (req, res, next) => {
       startDate, endDate, categoryId, paymentMethod,
       minAmount, maxAmount, search,
       page = 1, limit = 20, sort = '-date',
+      currency, displayCurrency = 'original',
     } = req.query;
 
     const where = { user_id: req.user.id };
@@ -20,6 +23,9 @@ const listExpenses = async (req, res, next) => {
     }
     if (categoryId) where.category_id = categoryId;
     if (paymentMethod) where.payment_method = paymentMethod;
+    if (currency && ['ARS', 'USD'].includes(currency)) {
+      where.currency = currency;
+    }
     if (minAmount || maxAmount) {
       where.amount = {};
       if (minAmount) where.amount[Op.gte] = parseFloat(minAmount);
@@ -41,8 +47,39 @@ const listExpenses = async (req, res, next) => {
       offset,
     });
 
+    // Apply conversions if displayCurrency is requested
+    let expenses = rows;
+    if (displayCurrency && displayCurrency !== 'original') {
+      expenses = await Promise.all(
+        rows.map(async (expense) => {
+          const exp = expense.toJSON();
+
+          // Only convert if the currency is different from the display currency
+          if (exp.currency !== displayCurrency) {
+            try {
+              const conversion = await convertAmount(
+                exp.amount,
+                exp.currency,
+                displayCurrency,
+                exp.date
+              );
+              exp.converted_amount = conversion.convertedAmount;
+              exp.converted_currency = displayCurrency;
+              exp.exchange_rate = conversion.exchangeRate;
+              exp.exchange_rate_date = conversion.exchangeRateDate;
+            } catch (convErr) {
+              // Log the error but continue (RNF-405: no bloquear si falta cotización)
+              logger.warn(`[ListExpenses] Error convirtiendo gasto ${exp.id}: ${convErr.message}`);
+            }
+          }
+
+          return exp;
+        })
+      );
+    }
+
     const totalPages = Math.ceil(count / parseInt(limit));
-    return paginated(res, rows, {
+    return paginated(res, expenses, {
       page: parseInt(page),
       limit: parseInt(limit),
       total: count,
@@ -65,7 +102,27 @@ const getExpense = async (req, res, next) => {
       ],
     });
     if (!expense) return error(res, 'Gasto no encontrado', 404);
-    return success(res, expense);
+
+    const expenseData = expense.toJSON();
+
+    // Add conversions to the response
+    try {
+      if (expenseData.currency === 'ARS') {
+        const convToUsd = await convertAmount(expenseData.amount, 'ARS', 'USD', expenseData.date);
+        expenseData.converted_to_usd = convToUsd.convertedAmount;
+        expenseData.exchange_rate_used = convToUsd.exchangeRate;
+        expenseData.exchange_rate_date = convToUsd.exchangeRateDate;
+      } else if (expenseData.currency === 'USD') {
+        const convToArs = await convertAmount(expenseData.amount, 'USD', 'ARS', expenseData.date);
+        expenseData.converted_to_ars = convToArs.convertedAmount;
+        expenseData.exchange_rate_used = convToArs.exchangeRate;
+        expenseData.exchange_rate_date = convToArs.exchangeRateDate;
+      }
+    } catch (convErr) {
+      logger.warn(`[GetExpense] Error convirtiendo gasto ${expenseData.id}: ${convErr.message}`);
+    }
+
+    return success(res, expenseData);
   } catch (err) {
     next(err);
   }
@@ -73,7 +130,7 @@ const getExpense = async (req, res, next) => {
 
 const createExpense = async (req, res, next) => {
   try {
-    const { description, amount, date, categoryId, paymentMethod, notes } = req.body;
+    const { description, amount, date, categoryId, paymentMethod, notes, currency = 'ARS' } = req.body;
 
     // Verify category belongs to user
     const category = await Category.findOne({
@@ -86,6 +143,7 @@ const createExpense = async (req, res, next) => {
       category_id: categoryId,
       description,
       amount,
+      currency,
       date,
       payment_method: paymentMethod,
       notes,
@@ -99,7 +157,7 @@ const createExpense = async (req, res, next) => {
 
 const createInstallmentExpense = async (req, res, next) => {
   try {
-    const { description, amount, date, categoryId, paymentMethod, numberOfInstallments, notes } = req.body;
+    const { description, amount, date, categoryId, paymentMethod, numberOfInstallments, notes, currency = 'ARS' } = req.body;
 
     const category = await Category.findOne({
       where: { id: categoryId, user_id: req.user.id },
@@ -119,6 +177,7 @@ const createInstallmentExpense = async (req, res, next) => {
       category_id: categoryId,
       description,
       amount,
+      currency,
       date,
       payment_method: paymentMethod || 'credit_card',
       is_installment: true,
@@ -163,11 +222,12 @@ const updateExpense = async (req, res, next) => {
     });
     if (!expense) return error(res, 'Gasto no encontrado', 404);
 
-    const { description, amount, date, categoryId, paymentMethod, notes } = req.body;
+    const { description, amount, date, categoryId, paymentMethod, notes, currency } = req.body;
     const updates = {};
     if (description !== undefined) updates.description = description;
     if (amount !== undefined) updates.amount = amount;
     if (date !== undefined) updates.date = date;
+    if (currency !== undefined) updates.currency = currency;
     if (categoryId !== undefined) {
       const category = await Category.findOne({ where: { id: categoryId, user_id: req.user.id } });
       if (!category) return error(res, 'Categoría no encontrada', 404);
@@ -197,4 +257,38 @@ const deleteExpense = async (req, res, next) => {
   }
 };
 
-module.exports = { listExpenses, getExpense, createExpense, createInstallmentExpense, updateExpense, deleteExpense };
+const convertAdhoc = async (req, res, next) => {
+  try {
+    const { amount, from_currency, to_currency, date } = req.query;
+
+    // Validate required parameters
+    if (!amount || !from_currency || !to_currency || !date) {
+      return error(res, 'Parámetros requeridos: amount, from_currency, to_currency, date', 400);
+    }
+
+    // Validate currencies
+    if (!['ARS', 'USD'].includes(from_currency) || !['ARS', 'USD'].includes(to_currency)) {
+      return error(res, "Monedas inválidas. Use 'ARS' o 'USD'", 400);
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return error(res, 'El monto debe ser un número positivo', 400);
+    }
+
+    const conversion = await convertAmount(parsedAmount, from_currency, to_currency, date);
+
+    return success(res, {
+      original_amount: parsedAmount,
+      original_currency: from_currency,
+      converted_amount: conversion.convertedAmount,
+      converted_currency: to_currency,
+      exchange_rate: conversion.exchangeRate,
+      exchange_rate_date: conversion.exchangeRateDate,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listExpenses, getExpense, createExpense, createInstallmentExpense, updateExpense, deleteExpense, convertAdhoc };
