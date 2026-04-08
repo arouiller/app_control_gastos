@@ -9,6 +9,8 @@ const { sequelize } = require('./models');
 const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
+const { checkAndMigrate } = require('./migrations/migrationEngine');
+const { versionCheckMiddleware, setMigrationStatus } = require('./migrations/versionCheck');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -43,6 +45,9 @@ if (process.env.NODE_ENV !== 'test') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Verificación de versión de BD (bloquea requests si hay migración en progreso)
+app.use(versionCheckMiddleware);
+
 // API Routes
 app.use('/api', routes);
 
@@ -75,16 +80,15 @@ async function startServer() {
     await sequelize.authenticate();
     logger.info('Conexión a base de datos establecida.');
 
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      logger.info('Base de datos sincronizada.');
-    }
+    await checkAndMigrate();
+    setMigrationStatus('ok');
 
     app.listen(PORT, () => {
       logger.info(`Servidor corriendo en puerto ${PORT}`);
     });
   } catch (err) {
     logger.error('No se pudo iniciar el servidor:', err);
+    setMigrationStatus('error', err);
     process.exit(1);
   }
 }
