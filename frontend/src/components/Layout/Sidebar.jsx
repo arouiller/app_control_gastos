@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
   FiHome, FiDollarSign, FiCreditCard, FiBarChart2,
-  FiTag, FiUser, FiX, FiShield,
+  FiTag, FiUser, FiX, FiShield, FiTrendingUp,
 } from 'react-icons/fi'
 
 const navItems = [
@@ -73,9 +73,26 @@ export default function Sidebar({ isOpen, onClose }) {
             ))}
           </ul>
 
-          {/* Admin link — solo visible para administradores */}
+          {/* Admin links — solo visible para administradores */}
           {user?.is_admin && (
-            <ul className="border-t border-neutral pt-2 mt-2">
+            <ul className="border-t border-neutral pt-2 mt-2 space-y-1">
+              <li>
+                <NavLink
+                  to="/exchange-rates"
+                  onClick={onClose}
+                  className={({ isActive }) => `
+                    flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium
+                    transition-colors duration-200
+                    ${isActive
+                      ? 'bg-secondary-light text-secondary'
+                      : 'text-neutral-darker hover:bg-neutral hover:text-primary'
+                    }
+                  `}
+                >
+                  <FiTrendingUp size={18} />
+                  Cotizaciones
+                </NavLink>
+              </li>
               <li>
                 <NavLink
                   to="/admin"

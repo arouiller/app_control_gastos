@@ -3,7 +3,12 @@
     "allow": [
       "Bash(cmd.exe /c \"node --version 2>&1 && cd /d \\\\\"c:\\\\Users\\\\alejandro.rouiller\\\\Documents\\\\proyectos\\\\App_control_gastos\\\\app_control_gastos\\\\backend\\\\\" && node -e \\\\\"require\\('dotenv'\\).config\\(\\); const { checkAndMigrate } = require\\('./src/migrations/migrationEngine'\\); checkAndMigrate\\(\\).then\\(\\(\\) => { console.log\\('OK'\\); process.exit\\(0\\); }\\).catch\\(e => { console.error\\('ERROR:', e.message, e.original && e.original.sqlMessage\\); process.exit\\(1\\); }\\);\\\\\" 2>&1\")",
       "Bash(cmd.exe /c \"node --version\")",
-      "Bash(powershell.exe -Command \"node --version\")"
+      "Bash(powershell.exe -Command \"node --version\")",
+      "Bash(npm install:*)",
+      "Bash(cmd.exe /c \"node --version && npm --version\")",
+      "Bash(cmd.exe /c \"where node && where npm\")",
+      "Bash(cmd.exe /c \"where node\")",
+      "Bash(powershell.exe -Command \"Get-Command node,npm -ErrorAction SilentlyContinue | Select-Object Name,Source\")"
     ]
   }
 }

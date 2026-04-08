@@ -10,6 +10,7 @@ const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
 const { versionCheckMiddleware } = require('./migrations/versionCheck');
+const { startExchangeRateJob } = require('../jobs/exchangeRateJob');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -83,6 +84,8 @@ async function startServer() {
   app.listen(PORT, () => {
     logger.info(`Servidor corriendo en puerto ${PORT}`);
   });
+
+  startExchangeRateJob();
 }
 
 if (require.main === module) {

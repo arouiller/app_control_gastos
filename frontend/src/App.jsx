@@ -12,6 +12,7 @@ import ReportMonthlyGrouping from './pages/reports/ReportMonthlyGrouping'
 import Categories from './pages/Categories'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
+import ExchangeRates from './pages/ExchangeRates'
 
 function PrivateRoute({ children }) {
   const { user } = useSelector((state) => state.auth)
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="categories" element={<Categories />} />
         <Route path="profile" element={<Profile />} />
         <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+        <Route path="exchange-rates" element={<AdminRoute><ExchangeRates /></AdminRoute>} />
       </Route>
 
       {/* Fallback */}
