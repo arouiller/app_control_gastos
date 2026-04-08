@@ -1,16 +1,15 @@
 # Especificaciones - App Control Gastos
 
-**Última actualización:** 8/4/2026, 11:06:18
+**Última actualización:** 8/4/2026, 11:53:18
 
-## En Desarrollo (2)
+## En Desarrollo (1)
 
 - [ ] **#10** - Login con Google SSO
   > Habilitar el login con Google SSO
-- [ ] **#8** - Grafico de gastos agrupados por mes
-  > Crear un nuevo grafico de gastos agrupados por mes, que permita contrastar categorias, gastos con efectivo vs tarjeta,
 
-## Completadas (0)
+## Completadas (1)
 
+- [x] **#8** - Grafico de gastos agrupados por mes
 
 ---
 
