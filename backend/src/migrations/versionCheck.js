@@ -1,8 +1,7 @@
-const { getCurrentVersion, getExpectedVersion } = require('./migrationEngine');
-const { error } = require('../utils/response');
-
-// Rutas que están exentas de la verificación de versión de BD
-const EXCLUDED_PATHS = ['/api/auth/login', '/api/auth/refresh', '/health'];
+// Rutas (relativas a /api) exentas de la verificación de versión de BD
+// El middleware está montado en app.use('/api', versionCheckMiddleware, routes)
+// por lo que req.path aquí es relativo a /api (ej: '/auth/login', no '/api/auth/login')
+const EXCLUDED_PATHS = ['/auth/login', '/auth/refresh'];
 
 /**
  * Middleware que bloquea requests si la base de datos no está en la versión correcta.

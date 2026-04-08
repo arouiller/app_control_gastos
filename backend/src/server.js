@@ -45,11 +45,8 @@ if (process.env.NODE_ENV !== 'test') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Verificación de versión de BD (bloquea requests si hay migración en progreso)
-app.use(versionCheckMiddleware);
-
-// API Routes
-app.use('/api', routes);
+// API Routes (con verificación de versión de BD antes de cada llamada a la API)
+app.use('/api', versionCheckMiddleware, routes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -79,22 +76,23 @@ async function startServer() {
   try {
     await sequelize.authenticate();
     logger.info('Conexión a base de datos establecida.');
-
-    try {
-      await checkAndMigrate();
-      setMigrationStatus('ok');
-    } catch (err) {
-      logger.error('[Migraciones] Error crítico en migración:', err);
-      setMigrationStatus('error', err);
-      // No se hace process.exit: el servidor arranca en estado 'error' para que los logs sean visibles
-    }
-
-    app.listen(PORT, () => {
-      logger.info(`Servidor corriendo en puerto ${PORT}`);
-    });
   } catch (err) {
-    logger.error('No se pudo iniciar el servidor:', err);
+    logger.error('No se pudo conectar a la base de datos:', err);
     process.exit(1);
+  }
+
+  // El servidor escucha primero; el middleware bloquea requests hasta que las
+  // migraciones terminen. Esto evita el problema con PM2 cluster y deploys lentos.
+  app.listen(PORT, () => {
+    logger.info(`Servidor corriendo en puerto ${PORT}`);
+  });
+
+  try {
+    await checkAndMigrate();
+    setMigrationStatus('ok');
+  } catch (err) {
+    logger.error('[Migraciones] Error crítico en migración:', err);
+    setMigrationStatus('error', err);
   }
 }
 
