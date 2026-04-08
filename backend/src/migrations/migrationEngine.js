@@ -132,7 +132,20 @@ async function executeSqlFile(filePath) {
   if (!sql) return;
   const statements = splitSqlStatements(sql);
   for (const stmt of statements) {
-    await sequelize.query(stmt);
+    try {
+      await sequelize.query(stmt);
+    } catch (err) {
+      const msg = err.original?.sqlMessage || err.message || '';
+      // Ignorar "Duplicate column name" (ADD COLUMN ya existente)
+      // e "Index already exists" (CREATE INDEX ya existente)
+      const isIdempotentError =
+        /Duplicate column name/i.test(msg) ||
+        /index.*already exists/i.test(msg) ||
+        /table.*already exists/i.test(msg) ||
+        /Trigger.*already exists/i.test(msg);
+      if (!isIdempotentError) throw err;
+      logger.warn(`[Migraciones] Ignorando error idempotente: ${msg}`);
+    }
   }
 }
 
