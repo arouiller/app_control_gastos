@@ -1,26 +1,20 @@
-const { Op } = require('sequelize');
-const { Installment, Expense, Category } = require('../models');
+const { Expense, Category } = require('../models');
 const { success, error, paginated } = require('../utils/response');
 
+// Lists child installment expenses from the expenses table (REQ-005 architecture)
 const listInstallments = async (req, res, next) => {
   try {
-    const { includeAllCuotas, page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
-    if (!includeAllCuotas || includeAllCuotas === 'false') {
-      where.is_paid = false;
-    }
-
-    const { rows, count } = await Installment.findAndCountAll({
-      where,
-      include: [{
-        model: Expense,
-        as: 'expense',
-        where: { user_id: req.user.id },
-        include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'color'] }],
-      }],
-      order: [['due_date', 'ASC']],
+    const { rows, count } = await Expense.findAndCountAll({
+      where: {
+        user_id: req.user.id,
+        is_installment: true,
+        installment_group_id: { [require('sequelize').Op.ne]: null },
+      },
+      include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'color'] }],
+      order: [['date', 'ASC'], ['installment_number', 'ASC']],
       limit: parseInt(limit),
       offset,
     });
@@ -39,70 +33,17 @@ const listInstallments = async (req, res, next) => {
   }
 };
 
+// Payment tracking is a future feature (REQ-005 Consideraciones Futuras)
 const payInstallment = async (req, res, next) => {
-  try {
-    const installment = await Installment.findOne({
-      where: { id: req.params.id },
-      include: [{
-        model: Expense,
-        as: 'expense',
-        where: { user_id: req.user.id },
-      }],
-    });
-
-    if (!installment) return error(res, 'Cuota no encontrada', 404);
-
-    const { paymentDate, notes } = req.body;
-    await installment.update({
-      is_paid: true,
-      paid_date: paymentDate || new Date(),
-      payment_notes: notes,
-    });
-
-    return success(res, installment, 'Cuota marcada como pagada');
-  } catch (err) {
-    next(err);
-  }
+  return error(res, 'Marcación de pago por cuota es una funcionalidad futura', 501);
 };
 
 const unpayInstallment = async (req, res, next) => {
-  try {
-    const installment = await Installment.findOne({
-      where: { id: req.params.id },
-      include: [{
-        model: Expense,
-        as: 'expense',
-        where: { user_id: req.user.id },
-      }],
-    });
-
-    if (!installment) return error(res, 'Cuota no encontrada', 404);
-
-    await installment.update({ is_paid: false, paid_date: null, payment_notes: null });
-    return success(res, installment, 'Cuota marcada como no pagada');
-  } catch (err) {
-    next(err);
-  }
+  return error(res, 'Marcación de pago por cuota es una funcionalidad futura', 501);
 };
 
 const deleteInstallment = async (req, res, next) => {
-  try {
-    const installment = await Installment.findOne({
-      where: { id: req.params.id },
-      include: [{
-        model: Expense,
-        as: 'expense',
-        where: { user_id: req.user.id },
-      }],
-    });
-
-    if (!installment) return error(res, 'Cuota no encontrada', 404);
-
-    await installment.destroy();
-    return success(res, null, 'Cuota eliminada');
-  } catch (err) {
-    next(err);
-  }
+  return error(res, 'Eliminá el gasto padre para eliminar todas las cuotas', 403);
 };
 
 module.exports = { listInstallments, payInstallment, unpayInstallment, deleteInstallment };

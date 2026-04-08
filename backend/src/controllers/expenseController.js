@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Expense, Category } = require('../models');
 const { success, created, error, paginated } = require('../utils/response');
+const { addMonths, format } = require('../utils/dateHelpers');
 const { convertAmount } = require('../services/currencyConversionService');
 const { sequelize } = require('../models');
 
@@ -17,10 +18,13 @@ const listExpenses = async (req, res, next) => {
     let whereClause = 'WHERE ewc.user_id = ?';
     const params = [req.user.id];
 
-    // RF-518: showConsolidated=true → only parent expenses (hide child installments)
-    // showConsolidated=false (default) → show all including individual installments
+    // RF-518: always filter installment expenses by mode to avoid double-counting:
+    // showConsolidated=true  → show non-installments + parent installments (installment_group_id IS NULL)
+    // showConsolidated=false → show non-installments + child installments  (installment_group_id IS NOT NULL)
     if (showConsolidated === 'true') {
-      whereClause += ' AND ewc.installment_group_id IS NULL';
+      whereClause += ' AND (ewc.is_installment = FALSE OR ewc.installment_group_id IS NULL)';
+    } else {
+      whereClause += ' AND (ewc.is_installment = FALSE OR ewc.installment_group_id IS NOT NULL)';
     }
 
     if (startDate || endDate) {
@@ -309,7 +313,8 @@ const createInstallmentExpense = async (req, res, next) => {
         notes,
       }, { transaction: t });
 
-      // Create N child expenses
+      // Create N child expenses, each with its own month date (cuota 1 = month 0, cuota 2 = month 1, ...)
+      const startDate = new Date(date);
       const childrenData = [];
       for (let i = 1; i <= numInstallments; i++) {
         childrenData.push({
@@ -318,7 +323,7 @@ const createInstallmentExpense = async (req, res, next) => {
           description,
           amount: installmentAmount,
           currency,
-          date,
+          date: format(addMonths(startDate, i - 1)),
           payment_method: paymentMethod || 'credit_card',
           is_installment: true,
           total_installments: numInstallments,
@@ -408,9 +413,10 @@ const updateExpense = async (req, res, next) => {
         const existingByNumber = {};
         existingChildren.forEach(c => { existingByNumber[c.installment_number] = c; });
 
+        const baseDate = updates.date || expense.date;
+
         const childUpdates = {};
         if (description !== undefined) childUpdates.description = description;
-        if (date !== undefined) childUpdates.date = date;
         if (currency !== undefined) childUpdates.currency = currency;
         if (categoryId !== undefined) childUpdates.category_id = categoryId;
         if (paymentMethod !== undefined) childUpdates.payment_method = paymentMethod;
@@ -419,8 +425,10 @@ const updateExpense = async (req, res, next) => {
         childUpdates.total_installments = newTotalInstallments;
 
         for (let i = 1; i <= newTotalInstallments; i++) {
+          // Each child gets its own date: base date + (i-1) months
+          const childDate = format(addMonths(new Date(baseDate), i - 1));
           if (existingByNumber[i]) {
-            await existingByNumber[i].update(childUpdates, { transaction: t });
+            await existingByNumber[i].update({ ...childUpdates, date: childDate }, { transaction: t });
           } else {
             // Create new child if adding installments
             await Expense.create({
@@ -429,7 +437,7 @@ const updateExpense = async (req, res, next) => {
               description: updates.description || expense.description,
               amount: newInstallmentAmount,
               currency: updates.currency || expense.currency,
-              date: updates.date || expense.date,
+              date: childDate,
               payment_method: updates.payment_method || expense.payment_method,
               is_installment: true,
               total_installments: newTotalInstallments,
