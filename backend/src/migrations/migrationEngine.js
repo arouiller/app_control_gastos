@@ -7,35 +7,15 @@ const MIGRATIONS_DIR = path.resolve(__dirname, '../../../database/migrations');
 const VERSIONS_FILE = path.join(MIGRATIONS_DIR, 'versions.json');
 const MIGRATION_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutos máximo
 
-// ─── Tablas de versionado ────────────────────────────────────────────────────
-
-const SQL_CREATE_SCHEMA_VERSION = `
-  CREATE TABLE IF NOT EXISTS schema_version (
-    id              INT AUTO_INCREMENT PRIMARY KEY,
-    version         VARCHAR(20)  NOT NULL,
-    applied_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    description     TEXT,
-    migration_time_ms INT
-  )
-`;
-
-const SQL_CREATE_SCHEMA_VERSION_HISTORY = `
-  CREATE TABLE IF NOT EXISTS schema_version_history (
-    id              INT AUTO_INCREMENT PRIMARY KEY,
-    from_version    VARCHAR(20),
-    to_version      VARCHAR(20),
-    status          ENUM('success', 'failed', 'rolled_back') NOT NULL,
-    applied_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    error_message   LONGTEXT,
-    migration_time_ms INT
-  )
-`;
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function bootstrapVersioningTables() {
-  await sequelize.query(SQL_CREATE_SCHEMA_VERSION);
-  await sequelize.query(SQL_CREATE_SCHEMA_VERSION_HISTORY);
+async function schemaVersionExists() {
+  try {
+    await sequelize.query('SELECT 1 FROM schema_version LIMIT 1');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function getCurrentVersion() {
@@ -43,10 +23,9 @@ async function getCurrentVersion() {
     const [rows] = await sequelize.query(
       'SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1'
     );
-    return rows.length > 0 ? rows[0].version : '0.0.0';
+    return rows.length > 0 ? rows[0].version : null;
   } catch {
-    // La tabla no existe aún → primera ejecución
-    return '0.0.0';
+    return null;
   }
 }
 
@@ -56,23 +35,20 @@ function getOrderedVersions() {
 }
 
 function getExpectedVersion() {
-  // La versión esperada es el último entry de versions.json.
-  // No depende de variables de entorno para evitar inconsistencias en deploys.
   const versions = getOrderedVersions();
   return versions[versions.length - 1];
 }
 
 function getVersionsBetween(from, to, allVersions) {
-  const fromIdx = from === '0.0.0' ? -1 : allVersions.indexOf(from);
+  // from === null significa BD vacía → aplicar desde la primera versión
+  const fromIdx = from === null ? -1 : allVersions.indexOf(from);
   const toIdx = allVersions.indexOf(to);
 
   if (toIdx === -1) throw new Error(`Versión destino ${to} no encontrada en versions.json`);
 
   if (fromIdx < toIdx) {
-    // Migración ascendente: versiones después de "from" hasta "to" (inclusive)
     return { direction: 'up', versions: allVersions.slice(fromIdx + 1, toIdx + 1) };
   } else if (fromIdx > toIdx) {
-    // Migración descendente: versiones desde "from" hasta "to" (exclusive), en orden inverso
     return { direction: 'down', versions: allVersions.slice(toIdx + 1, fromIdx + 1).reverse() };
   }
   return { direction: 'none', versions: [] };
@@ -90,11 +66,11 @@ function getSqlFilesForVersion(version, direction) {
 
 /**
  * Divide el contenido de un archivo SQL en statements individuales.
- * Respeta bloques BEGIN...END (para triggers/procedures).
+ * Respeta bloques BEGIN...END (triggers/procedures).
+ * END IF / END WHILE / END LOOP no decrementan la profundidad.
  */
 function splitSqlStatements(sql) {
-  // Eliminar comentarios de bloque
-  sql = sql.replace(/\/\*[\s\S]*?\*\//g, '');
+  sql = sql.replace(/\/\*[\s\S]*?\*\//g, ''); // eliminar comentarios de bloque
 
   const statements = [];
   let current = '';
@@ -102,17 +78,14 @@ function splitSqlStatements(sql) {
 
   for (const line of sql.split('\n')) {
     const trimmed = line.trim();
-    const trimmedUpper = trimmed.toUpperCase();
+    const upper = trimmed.toUpperCase();
     const withoutComment = trimmed.replace(/--.*$/, '').trim();
 
-    // Solo contar BEGIN/END de bloques de cuerpo (trigger/procedure).
-    // END IF, END WHILE, END LOOP NO deben decrementar depth.
-    if (trimmedUpper === 'BEGIN' || trimmedUpper === 'BEGIN;') depth++;
-    if (trimmedUpper === 'END' || trimmedUpper === 'END;') depth = Math.max(0, depth - 1);
+    if (upper === 'BEGIN' || upper === 'BEGIN;') depth++;
+    if (upper === 'END' || upper === 'END;') depth = Math.max(0, depth - 1);
 
     current += line + '\n';
 
-    // Separar en profundidad 0 cuando la línea termina con ;
     if (depth === 0 && withoutComment.endsWith(';')) {
       const stmt = current.replace(/;\s*$/, '').trim();
       if (stmt) statements.push(stmt);
@@ -120,7 +93,6 @@ function splitSqlStatements(sql) {
     }
   }
 
-  // Último statement sin ; final
   const remaining = current.trim();
   if (remaining) statements.push(remaining);
 
@@ -130,40 +102,41 @@ function splitSqlStatements(sql) {
 async function executeSqlFile(filePath) {
   const sql = fs.readFileSync(filePath, 'utf8').trim();
   if (!sql) return;
-  const statements = splitSqlStatements(sql);
-  for (const stmt of statements) {
+  for (const stmt of splitSqlStatements(sql)) {
     try {
       await sequelize.query(stmt);
     } catch (err) {
       const msg = err.original?.sqlMessage || err.message || '';
-      // Ignorar "Duplicate column name" (ADD COLUMN ya existente)
-      // e "Index already exists" (CREATE INDEX ya existente)
-      const isIdempotentError =
+      const isIdempotent =
         /Duplicate column name/i.test(msg) ||
         /index.*already exists/i.test(msg) ||
         /table.*already exists/i.test(msg) ||
         /Trigger.*already exists/i.test(msg);
-      if (!isIdempotentError) throw err;
+      if (!isIdempotent) throw err;
       logger.warn(`[Migraciones] Ignorando error idempotente: ${msg}`);
     }
   }
 }
 
-async function recordHistory(fromVersion, toVersion, status, errorMessage, timeMs) {
+async function setCurrentVersion(version, description, timeMs) {
+  await sequelize.query('DELETE FROM schema_version');
   await sequelize.query(
-    `INSERT INTO schema_version_history (from_version, to_version, status, error_message, migration_time_ms)
-     VALUES (?, ?, ?, ?, ?)`,
-    { replacements: [fromVersion, toVersion, status, errorMessage || null, timeMs] }
+    'INSERT INTO schema_version (version, description, migration_time_ms) VALUES (?, ?, ?)',
+    { replacements: [version, description || null, timeMs] }
   );
 }
 
-async function setCurrentVersion(version, description, timeMs) {
-  // schema_version guarda solo la versión actual: truncar y reemplazar
-  await sequelize.query('DELETE FROM schema_version');
-  await sequelize.query(
-    `INSERT INTO schema_version (version, description, migration_time_ms) VALUES (?, ?, ?)`,
-    { replacements: [version, description || null, timeMs] }
-  );
+async function recordHistory(fromVersion, toVersion, status, errorMessage, timeMs) {
+  try {
+    await sequelize.query(
+      `INSERT INTO schema_version_history (from_version, to_version, status, error_message, migration_time_ms)
+       VALUES (?, ?, ?, ?, ?)`,
+      { replacements: [fromVersion, toVersion, status, errorMessage || null, timeMs] }
+    );
+  } catch {
+    // schema_version_history puede no existir aún (fallo durante v1.0.0)
+    // En ese caso simplemente no registramos — el log del servidor tiene el error
+  }
 }
 
 // ─── Motor principal ──────────────────────────────────────────────────────────
@@ -174,11 +147,12 @@ async function runMigrations(currentVersion, targetVersion) {
 
   if (direction === 'none') return;
 
-  logger.info(`[Migraciones] Dirección: ${direction.toUpperCase()} | ${currentVersion} → ${targetVersion}`);
+  logger.info(`[Migraciones] Dirección: ${direction.toUpperCase()} | ${currentVersion ?? 'vacía'} → ${targetVersion}`);
   logger.info(`[Migraciones] Versiones a aplicar: ${versions.join(', ')}`);
 
   for (const version of versions) {
-    const fromVer = versions[0] === version ? currentVersion : versions[versions.indexOf(version) - 1];
+    const idx = versions.indexOf(version);
+    const fromVer = idx === 0 ? currentVersion : versions[idx - 1];
     const t0 = Date.now();
 
     logger.info(`[Migraciones] Aplicando v${version} (${direction})...`);
@@ -199,7 +173,7 @@ async function runMigrations(currentVersion, targetVersion) {
       const newVersion = direction === 'up' ? version : fromVer;
       await setCurrentVersion(newVersion, `Migración ${direction} a v${version}`, timeMs);
       await recordHistory(fromVer, version, 'success', null, timeMs);
-      logger.info(`[Migraciones] v${version} aplicada (${timeMs}ms)`);
+      logger.info(`[Migraciones] v${version} aplicada en ${timeMs}ms`);
     } catch (err) {
       const timeMs = Date.now() - t0;
       await recordHistory(fromVer, version, 'failed', err.message, timeMs);
@@ -212,19 +186,18 @@ async function runMigrations(currentVersion, targetVersion) {
 // ─── Punto de entrada ─────────────────────────────────────────────────────────
 
 async function _doCheckAndMigrate() {
-  await bootstrapVersioningTables();
-
-  const current = await getCurrentVersion();
+  const tableExists = await schemaVersionExists();
+  const current = tableExists ? await getCurrentVersion() : null;
   const expected = getExpectedVersion();
 
-  logger.info(`[Migraciones] Versión actual: ${current} | Versión esperada: ${expected}`);
+  logger.info(`[Migraciones] Versión actual: ${current ?? 'ninguna'} | Versión esperada: ${expected}`);
 
   if (current === expected) {
     logger.info('[Migraciones] Base de datos actualizada. Sin cambios necesarios.');
     return;
   }
 
-  logger.info(`[Migraciones] Ejecutando migraciones: ${current} → ${expected}`);
+  logger.info(`[Migraciones] Ejecutando migraciones: ${current ?? 'vacía'} → ${expected}`);
   const t0 = Date.now();
 
   await runMigrations(current, expected);
@@ -235,7 +208,7 @@ async function _doCheckAndMigrate() {
 async function checkAndMigrate() {
   const timeout = new Promise((_, reject) =>
     setTimeout(
-      () => reject(new Error(`Timeout: las migraciones tardaron más de ${MIGRATION_TIMEOUT_MS / 1000}s`)),
+      () => reject(new Error(`Timeout: migraciones tardaron más de ${MIGRATION_TIMEOUT_MS / 1000}s`)),
       MIGRATION_TIMEOUT_MS
     )
   );
