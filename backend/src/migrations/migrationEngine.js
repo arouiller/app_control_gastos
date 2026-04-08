@@ -109,6 +109,7 @@ async function executeSqlFile(filePath) {
       const msg = err.original?.sqlMessage || err.message || '';
       const isIdempotent =
         /Duplicate column name/i.test(msg) ||
+        /Duplicate key name/i.test(msg) ||
         /index.*already exists/i.test(msg) ||
         /table.*already exists/i.test(msg) ||
         /Trigger.*already exists/i.test(msg);
