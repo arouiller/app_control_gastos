@@ -14,7 +14,7 @@ import { PageLoader } from '../components/UI/LoadingSpinner'
 import EmptyState from '../components/UI/EmptyState'
 import Modal from '../components/UI/Modal'
 import { formatCurrency, formatDate, startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
-import { getDisplayAmount, getDisplayCurrency } from '../utils/currencyHelpers'
+import { getDisplayAmount } from '../utils/currencyHelpers'
 import { PAYMENT_METHOD_LABELS } from '../utils/constants'
 
 export default function Expenses() {
@@ -32,14 +32,15 @@ export default function Expenses() {
   }, [dispatch])
 
   useEffect(() => {
+    // When searching by text, don't restrict by default date range — installments span multiple months
+    const hasSearch = !!filters.search
     dispatch(fetchExpenses({
       ...filters,
       page,
       limit: 20,
-      startDate: filters.startDate || startOfCurrentMonth(),
-      endDate: filters.endDate || endOfCurrentMonth(),
+      startDate: filters.startDate || (hasSearch ? undefined : startOfCurrentMonth()),
+      endDate: filters.endDate || (hasSearch ? undefined : endOfCurrentMonth()),
       showConsolidated: filters.showConsolidated,
-      // Note: displayCurrency is NOT sent to backend anymore - it's local state
     }))
   }, [dispatch, filters, page])
 
@@ -191,12 +192,12 @@ export default function Expenses() {
                     <td className="px-4 py-3">
                       <div>
                         <p className="text-sm font-medium text-primary">{expense.description}</p>
-                        {expense.is_installment && expense.installment_number && (
+                        {!!expense.is_installment && !!expense.installment_number && (
                           <Badge variant="info" className="mt-0.5 text-xs">
                             Cuota {expense.installment_number}/{expense.total_installments}
                           </Badge>
                         )}
-                        {expense.is_installment && !expense.installment_number && (
+                        {!!expense.is_installment && !expense.installment_number && (
                           <Badge variant="warning" className="mt-0.5 text-xs">
                             {expense.total_installments} cuotas
                           </Badge>
