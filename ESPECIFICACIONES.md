@@ -1,6 +1,6 @@
 # Especificaciones - App Control Gastos
 
-**Última actualización:** 8/4/2026, 11:53:18
+**Última actualización:** 8/4/2026, 13:03:40
 
 ## En Desarrollo (1)
 
