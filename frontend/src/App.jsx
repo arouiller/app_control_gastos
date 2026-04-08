@@ -46,7 +46,7 @@ export default function App() {
         <Route path="expenses/new" element={<ExpenseForm />} />
         <Route path="expenses/:id/edit" element={<ExpenseForm />} />
         <Route path="installments" element={<Installments />} />
-        <Route path="reports" element={<Reports />} />
+        <Route path="reports" element={<Navigate to="/reports/monthly-grouping" replace />} />
         <Route path="reports/monthly-grouping" element={<ReportMonthlyGrouping />} />
         <Route path="categories" element={<Categories />} />
         <Route path="profile" element={<Profile />} />

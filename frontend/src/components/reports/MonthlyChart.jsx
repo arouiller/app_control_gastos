@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend, ResponsiveContainer, LabelList,
 } from 'recharts'
 import Card, { CardTitle } from '../UI/Card'
 import { formatCurrency } from '../../utils/formatters'
@@ -31,7 +31,29 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function MonthlyChart({ data, categories, onBarClick }) {
+// Custom X-axis tick — clickable to show all expenses for that month
+function CustomXAxisTick({ x, y, payload, chartData, onMonthClick }) {
+  const entry = chartData?.find((d) => d.month === payload.value)
+  const label = entry?.monthLabel || payload.value
+  const clickable = !!onMonthClick
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0} y={0} dy={12}
+        textAnchor="end"
+        fontSize={11}
+        fill={clickable ? '#2563EB' : '#6B7280'}
+        transform="rotate(-35)"
+        style={{ cursor: clickable ? 'pointer' : 'default' }}
+        onClick={() => onMonthClick && onMonthClick(payload.value)}
+      >
+        {label}
+      </text>
+    </g>
+  )
+}
+
+export default function MonthlyChart({ data, categories, onBarClick, onMonthClick }) {
   const [hiddenCategories, setHiddenCategories] = useState({})
 
   const toggleCategory = (catId) => {
@@ -59,18 +81,16 @@ export default function MonthlyChart({ data, categories, onBarClick }) {
   return (
     <Card>
       <CardTitle className="mb-4">Gastos Mensuales por Categoría</CardTitle>
-      <ResponsiveContainer width="100%" height={320}>
+      <ResponsiveContainer width="100%" height={340}>
         <BarChart
           data={data}
-          margin={{ top: 4, right: 4, left: 0, bottom: 40 }}
+          margin={{ top: 24, right: 4, left: 0, bottom: 40 }}
           barCategoryGap="20%"
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
           <XAxis
-            dataKey="monthLabel"
-            tick={{ fontSize: 11 }}
-            angle={-35}
-            textAnchor="end"
+            dataKey="month"
+            tick={<CustomXAxisTick chartData={data} onMonthClick={onMonthClick} />}
             interval={0}
           />
           <YAxis
@@ -84,7 +104,7 @@ export default function MonthlyChart({ data, categories, onBarClick }) {
               if (cat) toggleCategory(cat.id)
             }}
             wrapperStyle={{ cursor: 'pointer', fontSize: 12, paddingTop: 8 }}
-            formatter={(value, entry) => {
+            formatter={(value) => {
               const cat = categories.find((c) => c.name === value)
               const hidden = cat ? hiddenCategories[cat.id] : false
               return (
@@ -103,13 +123,20 @@ export default function MonthlyChart({ data, categories, onBarClick }) {
               stackId="stack"
               hide={hiddenCategories[cat.id]}
               onClick={(payload) => {
-                if (onBarClick && payload) {
-                  onBarClick(payload.month, cat)
-                }
+                if (onBarClick && payload) onBarClick(payload.month, cat)
               }}
               style={{ cursor: onBarClick ? 'pointer' : 'default' }}
             />
           ))}
+          {/* Phantom bar at top of stack — renders total label only */}
+          <Bar dataKey={() => 0} stackId="stack" fill="none" legendType="none" isAnimationActive={false}>
+            <LabelList
+              dataKey="total"
+              position="top"
+              formatter={(v) => v > 0 ? formatCurrency(v) : ''}
+              style={{ fontSize: 10, fontWeight: '600', fill: '#374151' }}
+            />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </Card>

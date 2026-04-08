@@ -27,7 +27,7 @@ function SortTh({ label, field, sort, onSort }) {
 }
 
 // ─── Inline detail table ──────────────────────────────────────────────────────
-function InlineDetail({ detailData, loading, selectedMonth, selectedCategory, selectedMonthLabel, onClose }) {
+function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabel, onClose }) {
   const [sort, setSort] = useState({ field: 'date', dir: 'desc' })
 
   const handleSort = (field) =>
@@ -38,25 +38,27 @@ function InlineDetail({ detailData, loading, selectedMonth, selectedCategory, se
   const expenses = detailData?.expenses || []
   const sorted = [...expenses].sort((a, b) => {
     let av, bv
-    if (sort.field === 'date')    { av = a.date;        bv = b.date }
-    if (sort.field === 'amount')  { av = a.amount || 0; bv = b.amount || 0 }
-    if (sort.field === 'desc')    { av = a.description?.toLowerCase(); bv = b.description?.toLowerCase() }
-    if (sort.field === 'method')  { av = a.paymentMethod; bv = b.paymentMethod }
+    if (sort.field === 'date')   { av = a.date;          bv = b.date }
+    if (sort.field === 'amount') { av = a.amount || 0;   bv = b.amount || 0 }
+    if (sort.field === 'desc')   { av = a.description?.toLowerCase(); bv = b.description?.toLowerCase() }
+    if (sort.field === 'method') { av = a.paymentMethod; bv = b.paymentMethod }
     if (av < bv) return sort.dir === 'asc' ? -1 : 1
     if (av > bv) return sort.dir === 'asc' ?  1 : -1
     return 0
   })
 
+  const title = selectedCategory
+    ? `${selectedCategory.name} — ${selectedMonthLabel}`
+    : `Todos los gastos — ${selectedMonthLabel}`
+
   return (
     <Card>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <CardTitle>
-            {selectedCategory?.name} — {selectedMonthLabel}
-          </CardTitle>
+          <CardTitle>{title}</CardTitle>
           {detailData && (
             <p className="text-xs text-neutral-darker mt-1">
-              {detailData.pagination?.total || expenses.length} gastos · Total: {formatCurrency(detailData.total || 0)}
+              {detailData.pagination?.total ?? expenses.length} gastos · Total: {formatCurrency(detailData.total || 0)}
             </p>
           )}
         </div>
@@ -85,7 +87,14 @@ function InlineDetail({ detailData, loading, selectedMonth, selectedCategory, se
             <tbody>
               {sorted.map((e) => (
                 <tr key={e.id} className="border-b border-neutral last:border-0 hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-primary">{e.description}</td>
+                  <td className="px-3 py-2">
+                    <span className="font-medium text-primary">{e.description}</span>
+                    {e.isInstallment && e.installmentNumber && (
+                      <Badge variant="info" className="ml-1 text-xs">
+                        {e.installmentNumber}/{e.totalInstallments}
+                      </Badge>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-neutral-darker whitespace-nowrap">{formatDate(e.date)}</td>
                   <td className="px-3 py-2">
                     <Badge variant={e.paymentMethod === 'cash' ? 'success' : 'info'} className="text-xs">
@@ -123,6 +132,7 @@ export default function ReportMonthlyGrouping() {
     detailLoading,
     updateFilters,
     openDetailModal,
+    openMonthDetail,
     closeDetailModal,
   } = useMonthlyReport()
 
@@ -136,13 +146,9 @@ export default function ReportMonthlyGrouping() {
       .finally(() => setCategoriesLoading(false))
   }, [])
 
-  const handleBarClick = (month, category) => {
-    openDetailModal(month, category)
-  }
-
   const selectedMonthLabel = selectedMonth && data
     ? data.monthLabels[data.months.indexOf(selectedMonth)]
-    : null
+    : selectedMonth || null
 
   if (categoriesLoading) return <PageLoader />
 
@@ -201,15 +207,15 @@ export default function ReportMonthlyGrouping() {
           <MonthlyChart
             data={chartData}
             categories={data?.categories || []}
-            onBarClick={handleBarClick}
+            onBarClick={(month, cat) => openDetailModal(month, cat)}
+            onMonthClick={(month) => openMonthDetail(month)}
           />
 
-          {/* Inline detail table — shown when a bar is clicked */}
+          {/* Inline detail table — shown when a bar or month is clicked */}
           {modalOpen && (
             <InlineDetail
               detailData={detailData}
               loading={detailLoading}
-              selectedMonth={selectedMonth}
               selectedCategory={selectedCategory}
               selectedMonthLabel={selectedMonthLabel}
               onClose={closeDetailModal}

@@ -193,6 +193,8 @@ const monthlyGroupingDetails = async (req, res, next) => {
         date: e.date,
         paymentMethod: e.payment_method,
         isInstallment: e.is_installment,
+        installmentNumber: e.installment_number || null,
+        totalInstallments: e.total_installments || null,
         notes: e.notes,
         createdAt: e.created_at,
       })),
