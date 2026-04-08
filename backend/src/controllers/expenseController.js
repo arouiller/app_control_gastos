@@ -69,11 +69,27 @@ const listExpenses = async (req, res, next) => {
     // Get expenses from view with category data
     const dataQuery = `
       SELECT
-        ewc.*,
-        c.id as 'category.id',
-        c.name as 'category.name',
-        c.color as 'category.color',
-        c.icon as 'category.icon'
+        ewc.id,
+        ewc.user_id,
+        ewc.category_id,
+        ewc.description,
+        ewc.original_amount,
+        ewc.original_currency,
+        ewc.amount_in_ars,
+        ewc.amount_in_usd,
+        ewc.expense_date,
+        ewc.payment_method,
+        ewc.is_installment,
+        ewc.installment_group_id,
+        ewc.exchange_rate_used,
+        ewc.exchange_rate_date,
+        ewc.notes,
+        ewc.created_at,
+        ewc.updated_at,
+        c.id as cat_id,
+        c.name as cat_name,
+        c.color as cat_color,
+        c.icon as cat_icon
       FROM expenses_with_conversions ewc
       LEFT JOIN categories c ON ewc.category_id = c.id
       ${whereClause}
@@ -103,11 +119,11 @@ const listExpenses = async (req, res, next) => {
       exchange_rate_used: exp.exchange_rate_used ? parseFloat(exp.exchange_rate_used) : null,
       exchange_rate_date: exp.exchange_rate_date,
       notes: exp.notes,
-      category: exp['category.id'] ? {
-        id: exp['category.id'],
-        name: exp['category.name'],
-        color: exp['category.color'],
-        icon: exp['category.icon'],
+      category: exp.cat_id ? {
+        id: exp.cat_id,
+        name: exp.cat_name,
+        color: exp.cat_color,
+        icon: exp.cat_icon,
       } : null,
     }));
 
@@ -130,11 +146,27 @@ const getExpense = async (req, res, next) => {
     // Get expense from view with conversions
     const expenseQuery = `
       SELECT
-        ewc.*,
-        c.id as 'category.id',
-        c.name as 'category.name',
-        c.color as 'category.color',
-        c.icon as 'category.icon'
+        ewc.id,
+        ewc.user_id,
+        ewc.category_id,
+        ewc.description,
+        ewc.original_amount,
+        ewc.original_currency,
+        ewc.amount_in_ars,
+        ewc.amount_in_usd,
+        ewc.expense_date,
+        ewc.payment_method,
+        ewc.is_installment,
+        ewc.installment_group_id,
+        ewc.exchange_rate_used,
+        ewc.exchange_rate_date,
+        ewc.notes,
+        ewc.created_at,
+        ewc.updated_at,
+        c.id as cat_id,
+        c.name as cat_name,
+        c.color as cat_color,
+        c.icon as cat_icon
       FROM expenses_with_conversions ewc
       LEFT JOIN categories c ON ewc.category_id = c.id
       WHERE ewc.id = ? AND ewc.user_id = ?
@@ -170,11 +202,11 @@ const getExpense = async (req, res, next) => {
       exchange_rate_used: expenseData.exchange_rate_used ? parseFloat(expenseData.exchange_rate_used) : null,
       exchange_rate_date: expenseData.exchange_rate_date,
       notes: expenseData.notes,
-      category: expenseData['category.id'] ? {
-        id: expenseData['category.id'],
-        name: expenseData['category.name'],
-        color: expenseData['category.color'],
-        icon: expenseData['category.icon'],
+      category: expenseData.cat_id ? {
+        id: expenseData.cat_id,
+        name: expenseData.cat_name,
+        color: expenseData.cat_color,
+        icon: expenseData.cat_icon,
       } : null,
       installments: installments.map(i => i.toJSON()),
     };

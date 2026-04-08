@@ -33,7 +33,10 @@ SELECT
   e.updated_at
 FROM expenses e
 LEFT JOIN (
-  -- For each expense, find the exchange rate (exact date or next available)
+  -- For each expense, find the exchange rate:
+  -- 1. Exact date
+  -- 2. Next available (posterior)
+  -- 3. Previous available (anterior)
   SELECT
     e2.id,
     COALESCE(
@@ -41,14 +44,20 @@ LEFT JOIN (
        WHERE rate_date = e2.date LIMIT 1),
       (SELECT ars_to_usd FROM exchange_rates
        WHERE rate_date > e2.date
-       ORDER BY rate_date ASC LIMIT 1)
+       ORDER BY rate_date ASC LIMIT 1),
+      (SELECT ars_to_usd FROM exchange_rates
+       WHERE rate_date < e2.date
+       ORDER BY rate_date DESC LIMIT 1)
     ) AS ars_to_usd,
     COALESCE(
       (SELECT rate_date FROM exchange_rates
        WHERE rate_date = e2.date LIMIT 1),
       (SELECT rate_date FROM exchange_rates
        WHERE rate_date > e2.date
-       ORDER BY rate_date ASC LIMIT 1)
+       ORDER BY rate_date ASC LIMIT 1),
+      (SELECT rate_date FROM exchange_rates
+       WHERE rate_date < e2.date
+       ORDER BY rate_date DESC LIMIT 1)
     ) AS rate_date
   FROM expenses e2
 ) er ON e.id = er.id;
