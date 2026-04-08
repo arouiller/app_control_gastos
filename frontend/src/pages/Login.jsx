@@ -5,7 +5,8 @@ import { z } from 'zod'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
 import { FiDollarSign } from 'react-icons/fi'
-import { loginUser, clearError } from '../store/authSlice'
+import { GoogleLogin } from '@react-oauth/google'
+import { loginUser, googleAuthUser, clearError } from '../store/authSlice'
 import Input from '../components/UI/Input'
 import Button from '../components/UI/Button'
 import Alert from '../components/UI/Alert'
@@ -30,6 +31,7 @@ export default function Login() {
   }, [user, navigate, dispatch])
 
   const onSubmit = (data) => dispatch(loginUser(data))
+  const onGoogleSuccess = ({ credential }) => dispatch(googleAuthUser(credential))
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -68,6 +70,21 @@ export default function Login() {
               Iniciar Sesión
             </Button>
           </form>
+
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 border-t border-neutral" />
+            <span className="text-xs text-neutral-darker">o</span>
+            <div className="flex-1 border-t border-neutral" />
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={onGoogleSuccess}
+              onError={() => dispatch({ type: 'auth/google/rejected', payload: 'Error al autenticar con Google' })}
+              text="signin_with"
+              locale="es"
+            />
+          </div>
 
           <p className="text-center text-sm text-neutral-darker mt-4">
             ¿No tienes cuenta?{' '}

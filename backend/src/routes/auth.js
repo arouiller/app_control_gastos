@@ -33,4 +33,12 @@ router.post('/forgot-password',
   ctrl.forgotPassword
 );
 
+router.post('/google',
+  [body('credential').notEmpty().withMessage('Token de Google requerido')],
+  validate,
+  ctrl.googleAuth
+);
+
+router.post('/google/link', authenticate, ctrl.linkGoogle);
+
 module.exports = router;
