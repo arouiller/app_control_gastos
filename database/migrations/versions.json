@@ -31,6 +31,14 @@
       "estimatedTime": "< 1 minuto",
       "breaking": false,
       "notes": "Agrega campo currency a expenses; retrocompatible (default ARS)"
+    },
+    {
+      "version": "1.0.4",
+      "description": "Vista de conversión de monedas para gastos",
+      "releaseDate": "2026-04-08",
+      "estimatedTime": "< 1 minuto",
+      "breaking": false,
+      "notes": "Crea vista expenses_with_conversions que devuelve cada gasto en original, ARS y USD"
     }
   ]
 }

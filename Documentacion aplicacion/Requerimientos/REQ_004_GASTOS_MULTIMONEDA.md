@@ -66,25 +66,23 @@ Los usuarios podrán:
   - Mostrar cotización utilizada: "Cotización [fecha del gasto]: X.XX"
   - Mostrar fecha de cotización para referencia
 
-### 2.4 Conversión de Monedas
+### 2.4 Conversión de Monedas (en Vista SQL)
 
-- **RF-408**: Conversion ARS → USD
-  - Fórmula: `monto_usd = monto_ars / ars_to_usd`
-  - Usar cotización del día del gasto de tabla `exchange_rates`
-  - Si no existe cotización exacta, usar inmediatamente posterior
+- **RF-408**: La vista `expenses_with_conversions` calcula automáticamente:
+  - **ARS → USD**: `monto_usd = monto_ars / ars_to_usd`
+  - **USD → ARS**: `monto_ars = monto_usd * ars_to_usd`
   - Redondeo: 2 decimales hacia arriba (CEILING)
 
-- **RF-409**: Conversión USD → ARS
-  - Fórmula: `monto_ars = monto_usd * ars_to_usd`
-  - Usar cotización del día del gasto de tabla `exchange_rates`
-  - Si no existe cotización exacta, usar inmediatamente posterior
-  - Redondeo: 2 decimales hacia arriba (CEILING)
+- **RF-409**: Búsqueda de cotización para cada gasto
+  - Buscar cotización exacta para `expense_date`
+  - Si no existe, usar la primera cotización posterior
+  - Si ninguna existe, campos de conversión quedan NULL (sin error)
+  - Registra `exchange_rate_date` para auditoría
 
-- **RF-410**: Búsqueda de cotización para una fecha
-  - Si existe cotización exacta para la fecha, usarla
-  - Si no existe, buscar la primera cotización posterior a esa fecha
-  - Si no existe anterior ni posterior, retornar error
-  - Registrar en log si se usa cotización de fecha diferente
+- **RF-410**: Tráfico de datos
+  - Backend: una consulta, devuelve siempre 3 valores (original, ARS, USD)
+  - Frontend: usa parámetro `displayCurrency` para elegir cuál mostrar
+  - Sin conversión adicional en tiempo de lectura
 
 ### 2.5 Listados y Reportes
 
@@ -133,28 +131,27 @@ Los usuarios podrán:
 
 ### 2.7 API REST
 
-- **RF-417**: Endpoint GET `/api/expenses` debe soportar filtro de moneda
-  - Query param: `currency` ('ARS', 'USD', o ambas)
-  - Query param: `display_currency` ('original', 'ARS', 'USD')
-  - Response: array de gastos con `amount` y `currency` originales
-  - Si `display_currency` != 'original': incluir campo `converted_amount` y `converted_currency`
+- **RF-417**: Endpoint GET `/api/expenses` siempre devuelve los 3 valores
+  - Query param: `currency` ('ARS', 'USD', o vacío para ambas) — filtra por moneda original
+  - Response: array con `original_amount`, `original_currency`, `amount_in_ars`, `amount_in_usd`
+  - Frontend elige cuál mostrar con parámetro local `displayCurrency`
 
-- **RF-418**: Endpoint POST `/api/expenses` debe aceptar moneda
-  - Body: `{ ..., amount: 1250.50, currency: 'ARS' }`
-  - Validar que `currency` sea 'ARS' o 'USD'
-  - Almacenar exactamente como se envía
-  - Response: gasto creado con moneda confirmada
+- **RF-418**: Endpoint POST `/api/expenses` acepta moneda
+  - Body: `{ description, amount: 1250.50, currency: 'ARS', date, categoryId, ... }`
+  - Validar: `currency` en ['ARS', 'USD']
+  - Almacenar en tabla `expenses` con moneda original
+  - Response: gasto creado (sin conversiones, aún no existe en vista)
 
-- **RF-419**: Endpoint GET `/api/expenses/:id` debe mostrar conversiones
-  - Response include: `amount`, `currency` (moneda original)
-  - Incluir: `converted_to_usd` (si currency es ARS), `exchange_rate_used`, `exchange_rate_date`
-  - Incluir: `converted_to_ars` (si currency es USD)
-  - Mostrar: qué cotización se usó y de qué fecha
+- **RF-419**: Endpoint GET `/api/expenses/:id` devuelve vista completa
+  - Response: todos los campos de `expenses_with_conversions`
+  - Incluye: `original_amount`, `amount_in_ars`, `amount_in_usd`
+  - Incluye: `exchange_rate_used`, `exchange_rate_date`
+  - Frontend decide qué mostrar según `displayCurrency` local
 
-- **RF-420**: Endpoint GET `/api/expenses/convert` para conversión ad-hoc
-  - Parámetros: `amount` (number), `from_currency` ('ARS'|'USD'), `to_currency` ('ARS'|'USD'), `date` (YYYY-MM-DD)
+- **RF-420**: Endpoint GET `/api/expenses/convert` para conversión ad-hoc (mantiene)
+  - Parámetros: `amount`, `from_currency`, `to_currency`, `date`
   - Response: `{ converted_amount, exchange_rate, exchange_rate_date }`
-  - Permite conversión de cualquier monto, no solo gastos existentes
+  - Usado cuando usuario quiere convertir un monto arbitrario
 
 ### 2.8 Edición de Gastos
 
@@ -265,18 +262,18 @@ Los usuarios podrán:
 - ✅ Formulario de ingreso permite seleccionar ARS o USD
 - ✅ Backend valida moneda en requests POST
 - ✅ Gastos se almacenan en moneda original (no convertidos)
-- ✅ Visualización muestra moneda original claramente
-- ✅ Conversión ARS → USD funciona correctamente con cotización del día
-- ✅ Conversión USD → ARS funciona correctamente con cotización del día
-- ✅ Si no existe cotización exacta, sistema usa cotización posterior
-- ✅ Listados permiten filtrar por moneda
-- ✅ Listados permiten visualizar en otra moneda
-- ✅ Reportes incluyen opciones de conversión
-- ✅ Reportes muestran subtotales por moneda cuando aplica
-- ✅ Gráficos pueden cambiarse de moneda dinámicamente
-- ✅ Dashboard muestra totales en ARS y USD
-- ✅ Conversiones completan en < 100ms
-- ✅ No existen datos convertidos duplicados en BD
+- ✅ Vista `expenses_with_conversions` calcula y devuelve los 3 valores (original, ARS, USD)
+- ✅ Conversión ARS → USD correcta con cotización del día o posterior
+- ✅ Conversión USD → ARS correcta con cotización del día o posterior
+- ✅ Si no existe cotización, campos de conversión quedan NULL (no bloquea)
+- ✅ GET `/api/expenses` devuelve siempre `original_amount`, `amount_in_ars`, `amount_in_usd`
+- ✅ Frontend almacena `displayCurrency` en estado local (no requiere server roundtrip)
+- ✅ Listados filtran por `currency` original si se solicita
+- ✅ Listados muestran monto según `displayCurrency` seleccionado
+- ✅ Reportes y dashboard usan los mismos valores de conversión
+- ✅ Gráficos cambian dinámicamente sin request adicional (datos ya en frontend)
+- ✅ Conversiones de vista completan en < 50ms (cálculo SQL)
+- ✅ No hay datos duplicados: una sola lectura entrega 3 valores
 
 ---
 
@@ -496,6 +493,90 @@ const Expense = sequelize.define('Expense', {
   ]
 });
 ```
+
+### 8.2 Vista SQL: `expenses_with_conversions`
+
+**Propósito:** Devolver cada gasto con sus valores en 3 monedas (original, ARS, USD) de una sola consulta.
+
+```sql
+CREATE OR REPLACE VIEW expenses_with_conversions AS
+SELECT 
+  e.id,
+  e.user_id,
+  e.category_id,
+  e.description,
+  e.amount AS original_amount,
+  e.currency AS original_currency,
+  e.date AS expense_date,
+  e.payment_method,
+  e.is_installment,
+  e.installment_group_id,
+  e.notes,
+  -- Valor en ARS
+  CASE 
+    WHEN e.currency = 'ARS' THEN e.amount
+    ELSE CEILING(e.amount * er.ars_to_usd * 100) / 100
+  END AS amount_in_ars,
+  -- Valor en USD
+  CASE 
+    WHEN e.currency = 'USD' THEN e.amount
+    ELSE CEILING(e.amount / er.ars_to_usd * 100) / 100
+  END AS amount_in_usd,
+  -- Cotización y fecha usada
+  er.ars_to_usd AS exchange_rate_used,
+  er.rate_date AS exchange_rate_date,
+  e.created_at,
+  e.updated_at
+FROM expenses e
+LEFT JOIN (
+  -- Subconsulta: obtener cotización exacta o la más cercana posterior
+  SELECT 
+    e2.id,
+    COALESCE(
+      (SELECT ars_to_usd FROM exchange_rates 
+       WHERE rate_date = e2.date LIMIT 1),
+      (SELECT ars_to_usd FROM exchange_rates 
+       WHERE rate_date > e2.date 
+       ORDER BY rate_date ASC LIMIT 1)
+    ) AS ars_to_usd,
+    COALESCE(
+      (SELECT rate_date FROM exchange_rates 
+       WHERE rate_date = e2.date LIMIT 1),
+      (SELECT rate_date FROM exchange_rates 
+       WHERE rate_date > e2.date 
+       ORDER BY rate_date ASC LIMIT 1)
+    ) AS rate_date
+  FROM expenses e2
+) er ON e.id = er.id;
+```
+
+### 8.3 Arquitectura: Backend → Frontend
+
+**Backend devuelve siempre:**
+```json
+{
+  "id": 1,
+  "description": "Almuerzo",
+  "original_amount": 250.50,
+  "original_currency": "ARS",
+  "amount_in_ars": 250.50,
+  "amount_in_usd": 0.20,
+  "exchange_rate_used": 1250.50,
+  "exchange_rate_date": "2026-04-08",
+  "date": "2026-04-08"
+}
+```
+
+**Frontend elige qué mostrar:**
+- `displayCurrency='original'` → usa `original_amount + original_currency`
+- `displayCurrency='ARS'` → usa `amount_in_ars`
+- `displayCurrency='USD'` → usa `amount_in_usd`
+
+**Ventajas:**
+- Una sola consulta con todos los valores
+- Frontend controla la visualización (sin requests adicionales)
+- Backend sin lógica de conversión por parámetro
+- Datos consistentes: siempre hay los 3 valores
 
 ### 8.2 Servicio de Conversión
 
@@ -755,51 +836,48 @@ function ExpenseForm({ onSubmit, initialValues }) {
 
 ## 9. PLAN DE IMPLEMENTACIÓN
 
-### Fase 1: Base de Datos y Backend
+### Fase 1: Base de Datos
 - [ ] Crear migración: agregar columna `currency` a tabla `expenses`
-- [ ] Crear servicio `currencyConversionService.js` con lógica de conversión
+- [ ] Crear migración: vista SQL `expenses_with_conversions`
+  - Calcula `amount_in_ars` y `amount_in_usd` para cada gasto
+  - Busca cotización exacta o inmediatamente posterior
+  - Incluye campos de auditoría: `exchange_rate_used`, `exchange_rate_date`
+
+### Fase 2: Backend - Controllers
 - [ ] Actualizar modelo `Expense` con campo `currency`
-- [ ] Actualizar controller: POST `/api/expenses` (validar moneda)
-- [ ] Actualizar controller: GET `/api/expenses` (filtro y conversión)
-- [ ] Crear endpoint: GET `/api/expenses/convert`
-- [ ] Crear endpoint: GET `/api/expenses/:id` (con conversión)
-- [ ] Tests unitarios para conversión (ARS→USD, USD→ARS)
-- [ ] Tests de integración para endpoints
+- [ ] Actualizar `expenseController.js`:
+  - POST `/api/expenses` — validar y guardar `currency`
+  - GET `/api/expenses` — usar vista, devolver los 3 valores
+  - GET `/api/expenses/:id` — usar vista, devolver los 3 valores
+  - PUT `/api/expenses/:id` — permitir cambiar `currency`
+- [ ] Mantener GET `/api/expenses/convert` — conversión manual
 
-### Fase 2: Frontend - Formularios
-- [ ] Actualizar `ExpenseForm.jsx`: agregar selector de moneda
-- [ ] Actualizar `ExpenseModal.jsx`: muestra moneda original
-- [ ] Validación frontend de moneda
-- [ ] Tests de componentes
+### Fase 3: Frontend - Estado
+- [ ] Agregar `displayCurrency` a `expensesSlice.js` (estado local)
+- [ ] Crear helper `getDisplayAmount(expense, displayCurrency)`
+- [ ] Actualizar `expenseService.js`
 
-### Fase 3: Frontend - Visualización
-- [ ] Actualizar listado de gastos: mostrar moneda original
-- [ ] Agregar filtro por moneda en listado
-- [ ] Agregar selector "Mostrar en" (Moneda original / ARS / USD)
-- [ ] Implementar conversión en tiempo real al cambiar selector
-- [ ] Mostrar totales por moneda en listado
-- [ ] Tests de interacción
+### Fase 4: Frontend - Formularios
+- [ ] `ExpenseForm.jsx`: selector de moneda (default ARS)
+- [ ] Cargar `currency` al editar
+- [ ] Validar en Zod
 
-### Fase 4: Reportes y Gráficos
-- [ ] Actualizar generador de reportes: soporte de `display_currency`
-- [ ] Agregar selector de moneda en reportes
-- [ ] Calcular subtotales por moneda
-- [ ] Actualizar gráficos: soporte de conversión
-- [ ] Agregar selector de moneda en gráficos
-- [ ] Tests de reportes con conversión
+### Fase 5: Frontend - Visualización
+- [ ] `Expenses.jsx`: selector "Mostrar en" → estado local
+- [ ] Columna de moneda original
+- [ ] Mostrar monto según `displayCurrency`
+- [ ] `ExpenseList.jsx`: mismo selector y lógica
 
-### Fase 5: Dashboard
-- [ ] Actualizar dashboard: mostrar totales en ARS y USD
-- [ ] Agregar resumen por moneda original
-- [ ] Agregar gráfico de moneda original vs equivalentes
-- [ ] Tests del dashboard
+### Fase 6: Reportes y Dashboard
+- [ ] Dashboard: selector "Mostrar en"
+- [ ] Reports: selector "Mostrar en"
+- [ ] Recalcular sumas/promedios según `displayCurrency`
 
-### Fase 6: Testing y Documentación
-- [ ] Tests end-to-end de flujos completos
-- [ ] Testing con cotizaciones faltantes
-- [ ] Performance testing con 1000+ gastos mixtos
-- [ ] Documentación de APIs
-- [ ] Documentación para usuarios
+### Fase 7: Testing
+- [ ] Pruebas de vista SQL
+- [ ] Conversiones correctas
+- [ ] Selector `displayCurrency` sin requests
+- [ ] Performance con 10k+ gastos
 
 ---
 

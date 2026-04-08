@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { FiPlus, FiEdit2, FiTrash2, FiFilter, FiSearch, FiX } from 'react-icons/fi'
-import { fetchExpenses, deleteExpense, setFilters, clearFilters } from '../store/expensesSlice'
+import { fetchExpenses, deleteExpense, setFilters, clearFilters, setDisplayCurrency } from '../store/expensesSlice'
 import { fetchCategories } from '../store/categoriesSlice'
 import Button from '../components/UI/Button'
 import Input from '../components/UI/Input'
@@ -14,12 +14,13 @@ import { PageLoader } from '../components/UI/LoadingSpinner'
 import EmptyState from '../components/UI/EmptyState'
 import Modal from '../components/UI/Modal'
 import { formatCurrency, formatDate, startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
+import { getDisplayAmount, getDisplayCurrency } from '../utils/currencyHelpers'
 import { PAYMENT_METHOD_LABELS } from '../utils/constants'
 
 export default function Expenses() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
-  const { items: expenses, pagination, loading, filters } = useSelector((state) => state.expenses)
+  const { items: expenses, pagination, loading, filters, displayCurrency } = useSelector((state) => state.expenses)
   const { items: categories } = useSelector((state) => state.categories)
   const [page, setPage] = useState(1)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -37,6 +38,7 @@ export default function Expenses() {
       limit: 20,
       startDate: filters.startDate || startOfCurrentMonth(),
       endDate: filters.endDate || endOfCurrentMonth(),
+      // Note: displayCurrency is NOT sent to backend anymore - it's local state
     }))
   }, [dispatch, filters, page])
 
@@ -125,8 +127,8 @@ export default function Expenses() {
                 { value: 'ARS', label: 'Pesos (ARS)' },
                 { value: 'USD', label: 'Dólares (USD)' },
               ]}
-              value={filters.displayCurrency}
-              onChange={(e) => dispatch(setFilters({ displayCurrency: e.target.value }))}
+              value={displayCurrency}
+              onChange={(e) => dispatch(setDisplayCurrency(e.target.value))}
             />
           </div>
           <div className="flex gap-3 mt-3">
@@ -202,18 +204,18 @@ export default function Expenses() {
                     <td className="px-4 py-3 text-right font-mono font-semibold text-sm text-primary">
                       <div>
                         <span>
-                          {formatCurrency(expense.converted_amount ?? expense.amount)}
+                          {formatCurrency(getDisplayAmount(expense, displayCurrency))}
                         </span>
-                        {expense.converted_amount && (
+                        {displayCurrency !== 'original' && (
                           <span className="text-xs text-neutral-darker block">
-                            (orig: {formatCurrency(expense.amount)} {expense.currency})
+                            (orig: {formatCurrency(expense.original_amount)} {expense.original_currency})
                           </span>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell text-right">
-                      <Badge variant={expense.currency === 'ARS' ? 'warning' : 'info'}>
-                        {expense.currency}
+                      <Badge variant={expense.original_currency === 'ARS' ? 'warning' : 'info'}>
+                        {expense.original_currency}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">

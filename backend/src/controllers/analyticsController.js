@@ -5,60 +5,31 @@ const { startOfMonth, endOfMonth, format } = require('../utils/dateHelpers');
 const { convertAmount } = require('../services/currencyConversionService');
 const logger = require('../utils/logger');
 
-// Helper to convert expense amount if needed
-async function convertExpenseAmountIfNeeded(expense, displayCurrency) {
-  if (!displayCurrency || displayCurrency === 'original') {
-    return parseFloat(expense.amount);
-  }
-
-  if (expense.currency === displayCurrency) {
-    return parseFloat(expense.amount);
-  }
-
-  try {
-    const conversion = await convertAmount(
-      parseFloat(expense.amount),
-      expense.currency || 'ARS',
-      displayCurrency,
-      expense.date
-    );
-    return conversion.convertedAmount;
-  } catch (err) {
-    logger.warn(`[Analytics] Error convirtiendo gasto ${expense.id}: ${err.message}`);
-    return parseFloat(expense.amount); // fallback to original
-  }
-}
+// Note: No conversion logic in backend anymore
+// Analytics always works with original amounts
+// Frontend handles displayCurrency selection locally
 
 const getSummary = async (req, res, next) => {
   try {
     const now = new Date();
     const start = req.query.startDate || format(startOfMonth(now));
     const end = req.query.endDate || format(endOfMonth(now));
-    const displayCurrency = req.query.displayCurrency || 'original';
 
     const expenses = await Expense.findAll({
       where: {
         user_id: req.user.id,
         date: { [Op.between]: [start, end] },
       },
-      attributes: ['amount', 'payment_method', 'currency', 'date'],
+      attributes: ['amount', 'payment_method'],
     });
 
-    // Convert amounts if needed
-    const convertedExpenses = await Promise.all(
-      expenses.map(async (e) => ({
-        ...e.toJSON(),
-        convertedAmount: await convertExpenseAmountIfNeeded(e, displayCurrency),
-      }))
-    );
-
-    const totalExpenses = convertedExpenses.reduce((sum, e) => sum + e.convertedAmount, 0);
-    const cashTotal = convertedExpenses
+    const totalExpenses = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+    const cashTotal = expenses
       .filter((e) => e.payment_method === 'cash')
-      .reduce((sum, e) => sum + e.convertedAmount, 0);
-    const cardTotal = convertedExpenses
+      .reduce((sum, e) => sum + parseFloat(e.amount), 0);
+    const cardTotal = expenses
       .filter((e) => e.payment_method === 'credit_card')
-      .reduce((sum, e) => sum + e.convertedAmount, 0);
+      .reduce((sum, e) => sum + parseFloat(e.amount), 0);
 
     // Previous month comparison
     const prevStart = new Date(start);
@@ -71,16 +42,9 @@ const getSummary = async (req, res, next) => {
         user_id: req.user.id,
         date: { [Op.between]: [format(prevStart), format(prevEnd)] },
       },
-      attributes: ['amount', 'currency', 'date'],
+      attributes: ['amount'],
     });
-
-    const convertedPrevExpenses = await Promise.all(
-      prevExpenses.map(async (e) => ({
-        ...e.toJSON(),
-        convertedAmount: await convertExpenseAmountIfNeeded(e, displayCurrency),
-      }))
-    );
-    const prevTotal = convertedPrevExpenses.reduce((sum, e) => sum + e.convertedAmount, 0);
+    const prevTotal = prevExpenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
 
     const startDate = new Date(start);
     const endDate = new Date(end);
@@ -112,63 +76,40 @@ const getByCategory = async (req, res, next) => {
     const now = new Date();
     const start = req.query.startDate || format(startOfMonth(now));
     const end = req.query.endDate || format(endOfMonth(now));
-    const displayCurrency = req.query.displayCurrency || 'original';
 
-    const expenses = await Expense.findAll({
+    const results = await Expense.findAll({
       where: {
         user_id: req.user.id,
         date: { [Op.between]: [start, end] },
       },
+      attributes: [
+        'category_id',
+        [fn('SUM', col('amount')), 'totalAmount'],
+        [fn('COUNT', col('Expense.id')), 'transactionCount'],
+        [fn('AVG', col('amount')), 'averageAmount'],
+      ],
       include: [{
         model: Category,
         as: 'category',
         attributes: ['id', 'name', 'color'],
       }],
-      attributes: ['category_id', 'amount', 'currency', 'date'],
+      group: ['category_id', 'category.id', 'category.name', 'category.color'],
+      order: [[literal('totalAmount'), 'DESC']],
     });
 
-    // Convert amounts if needed
-    const convertedExpenses = await Promise.all(
-      expenses.map(async (e) => ({
-        category_id: e.category_id,
-        categoryName: e.category?.name,
-        categoryColor: e.category?.color,
-        amount: await convertExpenseAmountIfNeeded(e, displayCurrency),
-      }))
-    );
-
-    // Group by category
-    const categoryMap = {};
-    convertedExpenses.forEach((e) => {
-      if (!categoryMap[e.category_id]) {
-        categoryMap[e.category_id] = {
-          categoryId: e.category_id,
-          categoryName: e.categoryName,
-          color: e.categoryColor,
-          totalAmount: 0,
-          transactionCount: 0,
-          amounts: [],
-        };
-      }
-      categoryMap[e.category_id].totalAmount += e.amount;
-      categoryMap[e.category_id].transactionCount += 1;
-      categoryMap[e.category_id].amounts.push(e.amount);
-    });
-
-    const results = Object.values(categoryMap);
-    const totalExpenses = results.reduce((sum, r) => sum + r.totalAmount, 0);
+    const totalExpenses = results.reduce((sum, r) => sum + parseFloat(r.dataValues.totalAmount || 0), 0);
 
     const data = results.map((r) => ({
-      categoryId: r.categoryId,
-      categoryName: r.categoryName,
-      color: r.color,
-      totalAmount: parseFloat(r.totalAmount.toFixed(2)),
+      categoryId: r.category_id,
+      categoryName: r.category?.name,
+      color: r.category?.color,
+      totalAmount: parseFloat(parseFloat(r.dataValues.totalAmount || 0).toFixed(2)),
       percentage: totalExpenses > 0
-        ? parseFloat(((r.totalAmount / totalExpenses) * 100).toFixed(2))
+        ? parseFloat(((parseFloat(r.dataValues.totalAmount) / totalExpenses) * 100).toFixed(2))
         : 0,
-      transactionCount: r.transactionCount,
-      averageTransaction: parseFloat((r.totalAmount / r.transactionCount).toFixed(2)),
-    })).sort((a, b) => b.totalAmount - a.totalAmount);
+      transactionCount: parseInt(r.dataValues.transactionCount),
+      averageTransaction: parseFloat(parseFloat(r.dataValues.averageAmount || 0).toFixed(2)),
+    }));
 
     return success(res, { categories: data, totalExpenses: parseFloat(totalExpenses.toFixed(2)) });
   } catch (err) {
@@ -181,38 +122,28 @@ const getCashVsCard = async (req, res, next) => {
     const now = new Date();
     const start = req.query.startDate || format(startOfMonth(now));
     const end = req.query.endDate || format(endOfMonth(now));
-    const displayCurrency = req.query.displayCurrency || 'original';
 
     const expenses = await Expense.findAll({
       where: {
         user_id: req.user.id,
         date: { [Op.between]: [start, end] },
       },
-      attributes: ['date', 'amount', 'payment_method', 'currency'],
+      attributes: ['date', 'amount', 'payment_method'],
       order: [['date', 'ASC']],
     });
 
-    // Convert amounts if needed
-    const convertedExpenses = await Promise.all(
-      expenses.map(async (e) => ({
-        date: e.date,
-        amount: await convertExpenseAmountIfNeeded(e, displayCurrency),
-        payment_method: e.payment_method,
-      }))
-    );
-
-    const cashTotal = convertedExpenses.filter((e) => e.payment_method === 'cash')
-      .reduce((sum, e) => sum + e.amount, 0);
-    const cardTotal = convertedExpenses.filter((e) => e.payment_method === 'credit_card')
-      .reduce((sum, e) => sum + e.amount, 0);
+    const cashTotal = expenses.filter((e) => e.payment_method === 'cash')
+      .reduce((sum, e) => sum + parseFloat(e.amount), 0);
+    const cardTotal = expenses.filter((e) => e.payment_method === 'credit_card')
+      .reduce((sum, e) => sum + parseFloat(e.amount), 0);
     const grandTotal = cashTotal + cardTotal;
 
     // Build timeline grouped by day
     const timelineMap = {};
-    convertedExpenses.forEach((e) => {
+    expenses.forEach((e) => {
       const day = e.date;
       if (!timelineMap[day]) timelineMap[day] = { date: day, cash: 0, card: 0, total: 0 };
-      const amount = e.amount;
+      const amount = parseFloat(e.amount);
       if (e.payment_method === 'cash') timelineMap[day].cash += amount;
       else timelineMap[day].card += amount;
       timelineMap[day].total += amount;
@@ -243,7 +174,6 @@ const getCashVsCard = async (req, res, next) => {
 const getPendingInstallments = async (req, res, next) => {
   try {
     const daysAhead = parseInt(req.query.daysAhead || 30);
-    const displayCurrency = req.query.displayCurrency || 'original';
     const today = new Date();
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + daysAhead);
@@ -257,28 +187,22 @@ const getPendingInstallments = async (req, res, next) => {
         model: Expense,
         as: 'expense',
         where: { user_id: req.user.id },
-        attributes: ['id', 'description', 'currency', 'date'],
         include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'color'] }],
       }],
-      attributes: ['id', 'expense_id', 'amount', 'due_date', 'installment_number', 'total_installments'],
       order: [['due_date', 'ASC']],
     });
 
-    const data = await Promise.all(
-      installments.map(async (i) => ({
-        id: i.id,
-        expenseId: i.expense_id,
-        description: i.expense?.description,
-        categoryName: i.expense?.category?.name,
-        amount: displayCurrency && displayCurrency !== 'original'
-          ? (await convertExpenseAmountIfNeeded({ amount: i.amount, currency: i.expense?.currency || 'ARS', date: i.expense?.date }, displayCurrency))
-          : parseFloat(i.amount),
-        dueDate: i.due_date,
-        daysUntilDue: Math.ceil((new Date(i.due_date) - today) / (1000 * 60 * 60 * 24)),
-        installmentNumber: i.installment_number,
-        totalInstallments: i.total_installments,
-      }))
-    );
+    const data = installments.map((i) => ({
+      id: i.id,
+      expenseId: i.expense_id,
+      description: i.expense?.description,
+      categoryName: i.expense?.category?.name,
+      amount: parseFloat(i.amount),
+      dueDate: i.due_date,
+      daysUntilDue: Math.ceil((new Date(i.due_date) - today) / (1000 * 60 * 60 * 24)),
+      installmentNumber: i.installment_number,
+      totalInstallments: i.total_installments,
+    }));
 
     const totalAmount = data.reduce((sum, i) => sum + i.amount, 0);
 
