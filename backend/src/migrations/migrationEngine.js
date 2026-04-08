@@ -184,6 +184,32 @@ async function runMigrations(currentVersion, targetVersion) {
   }
 }
 
+// ─── Operaciones manuales ─────────────────────────────────────────────────────
+
+let migrationLock = false;
+
+async function migrateTo(targetVersion) {
+  if (migrationLock) throw new Error('Ya hay una migración en curso.');
+  const allVersions = getOrderedVersions();
+  if (!allVersions.includes(targetVersion)) {
+    throw new Error(`Versión ${targetVersion} no encontrada en versions.json`);
+  }
+  migrationLock = true;
+  try {
+    const current = await getCurrentVersion();
+    if (current === targetVersion) return { from: current, to: targetVersion, changed: false };
+    await runMigrations(current, targetVersion);
+    return { from: current, to: targetVersion, changed: true };
+  } finally {
+    migrationLock = false;
+  }
+}
+
+function getVersionsMetadata() {
+  const config = JSON.parse(fs.readFileSync(VERSIONS_FILE, 'utf8'));
+  return config.versions;
+}
+
 // ─── Punto de entrada ─────────────────────────────────────────────────────────
 
 async function _doCheckAndMigrate() {
@@ -216,4 +242,4 @@ async function checkAndMigrate() {
   return Promise.race([_doCheckAndMigrate(), timeout]);
 }
 
-module.exports = { checkAndMigrate, getCurrentVersion, getExpectedVersion };
+module.exports = { checkAndMigrate, getCurrentVersion, getExpectedVersion, migrateTo, getVersionsMetadata };

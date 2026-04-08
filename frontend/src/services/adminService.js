@@ -5,4 +5,14 @@ const getDbInfo = async () => {
   return data.data
 }
 
-export const adminService = { getDbInfo }
+const getDbVersions = async () => {
+  const { data } = await api.get('/admin/db-versions')
+  return data.data
+}
+
+const migrateToVersion = async (version) => {
+  const { data } = await api.post('/admin/db-migrate', { version })
+  return data.data
+}
+
+export const adminService = { getDbInfo, getDbVersions, migrateToVersion }
