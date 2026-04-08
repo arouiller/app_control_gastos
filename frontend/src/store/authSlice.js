@@ -22,15 +22,6 @@ export const registerUser = createAsyncThunk('auth/register', async (userData, {
   }
 })
 
-export const googleAuthUser = createAsyncThunk('auth/google', async (credential, { rejectWithValue }) => {
-  try {
-    const data = await authService.googleAuth(credential)
-    return data
-  } catch (err) {
-    return rejectWithValue(err.response?.data?.error?.message || 'Error al autenticar con Google')
-  }
-})
-
 export const logoutUser = createAsyncThunk('auth/logout', async (_, { rejectWithValue }) => {
   try {
     await authService.logout()
@@ -83,19 +74,6 @@ const authSlice = createSlice({
         localStorage.setItem('user', JSON.stringify(action.payload.data))
       })
       .addCase(registerUser.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload
-      })
-      .addCase(googleAuthUser.pending, (state) => { state.loading = true; state.error = null })
-      .addCase(googleAuthUser.fulfilled, (state, action) => {
-        state.loading = false
-        state.user = action.payload.data
-        state.accessToken = action.payload.accessToken
-        localStorage.setItem('accessToken', action.payload.accessToken)
-        localStorage.setItem('refreshToken', action.payload.refreshToken)
-        localStorage.setItem('user', JSON.stringify(action.payload.data))
-      })
-      .addCase(googleAuthUser.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload
       })
