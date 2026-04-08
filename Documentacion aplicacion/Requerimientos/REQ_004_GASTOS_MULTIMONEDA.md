@@ -73,9 +73,10 @@ Los usuarios podrán:
   - **USD → ARS**: `monto_ars = monto_usd * ars_to_usd`
   - Redondeo: 2 decimales hacia arriba (CEILING)
 
-- **RF-409**: Búsqueda de cotización para cada gasto
-  - Buscar cotización exacta para `expense_date`
-  - Si no existe, usar la primera cotización posterior
+- **RF-409**: Búsqueda de cotización para cada gasto (prioridad)
+  1. Cotización exacta para `expense_date`
+  2. Cotización inmediata posterior (primero hábil después)
+  3. Cotización inmediata anterior (último hábil antes)
   - Si ninguna existe, campos de conversión quedan NULL (sin error)
   - Registra `exchange_rate_date` para auditoría
 
