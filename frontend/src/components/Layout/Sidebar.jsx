@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 import {
   FiHome, FiDollarSign, FiCreditCard, FiBarChart2,
-  FiTag, FiUser, FiX,
+  FiTag, FiUser, FiX, FiShield,
 } from 'react-icons/fi'
 
 const navItems = [
@@ -14,6 +15,7 @@ const navItems = [
 ]
 
 export default function Sidebar({ isOpen, onClose }) {
+  const { user } = useSelector((state) => state.auth)
   return (
     <>
       {/* Overlay for mobile */}
@@ -48,8 +50,8 @@ export default function Sidebar({ isOpen, onClose }) {
         </div>
 
         {/* Navigation */}
-        <nav className="p-3 mt-2 lg:mt-0">
-          <ul className="space-y-1">
+        <nav className="p-3 mt-2 lg:mt-0 flex flex-col h-[calc(100%-80px)]">
+          <ul className="space-y-1 flex-1">
             {navItems.map(({ to, label, Icon }) => (
               <li key={to}>
                 <NavLink
@@ -70,6 +72,29 @@ export default function Sidebar({ isOpen, onClose }) {
               </li>
             ))}
           </ul>
+
+          {/* Admin link — solo visible para administradores */}
+          {user?.is_admin && (
+            <ul className="border-t border-neutral pt-2 mt-2">
+              <li>
+                <NavLink
+                  to="/admin"
+                  onClick={onClose}
+                  className={({ isActive }) => `
+                    flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium
+                    transition-colors duration-200
+                    ${isActive
+                      ? 'bg-secondary-light text-secondary'
+                      : 'text-neutral-darker hover:bg-neutral hover:text-primary'
+                    }
+                  `}
+                >
+                  <FiShield size={18} />
+                  Administrador
+                </NavLink>
+              </li>
+            </ul>
+          )}
         </nav>
       </aside>
     </>

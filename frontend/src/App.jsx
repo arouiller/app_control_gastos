@@ -11,10 +11,18 @@ import Reports from './pages/Reports'
 import ReportMonthlyGrouping from './pages/reports/ReportMonthlyGrouping'
 import Categories from './pages/Categories'
 import Profile from './pages/Profile'
+import Admin from './pages/Admin'
 
 function PrivateRoute({ children }) {
   const { user } = useSelector((state) => state.auth)
   return user ? children : <Navigate to="/login" replace />
+}
+
+function AdminRoute({ children }) {
+  const { user } = useSelector((state) => state.auth)
+  if (!user) return <Navigate to="/login" replace />
+  if (!user.is_admin) return <Navigate to="/dashboard" replace />
+  return children
 }
 
 function PublicRoute({ children }) {
@@ -41,6 +49,7 @@ export default function App() {
         <Route path="reports/monthly-grouping" element={<ReportMonthlyGrouping />} />
         <Route path="categories" element={<Categories />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
       </Route>
 
       {/* Fallback */}
