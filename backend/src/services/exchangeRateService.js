@@ -2,13 +2,13 @@ const https = require('https');
 const { sequelize } = require('../models');
 const logger = require('../utils/logger');
 
-const BCRA_BASE_URL = 'https://api.bcra.gob.ar/estadisticas/v3.0/datosvariable/4';
+const BCRA_BASE_URL = 'https://api.bcra.gob.ar/estadisticas/v4.0/monetarias/4';
 const TIMEOUT_MS = 30000;
 
 // ─── BCRA API ─────────────────────────────────────────────────────────────────
 
 async function fetchFromBCRA(fechaDesde, fechaHasta) {
-  const url = `${BCRA_BASE_URL}/${fechaDesde}/${fechaHasta}`;
+  const url = `${BCRA_BASE_URL}?desde=${fechaDesde}&hasta=${fechaHasta}`;
   logger.info(`[ExchangeRate] Consultando BCRA: ${url}`);
 
   return new Promise((resolve, reject) => {
@@ -26,7 +26,9 @@ async function fetchFromBCRA(fechaDesde, fechaHasta) {
         }
         try {
           const parsed = JSON.parse(body);
-          resolve(parsed.results || []);
+          // v4.0: { results: [{ idVariable, detalle: [{ fecha, valor }] }] }
+          const detalle = parsed.results?.[0]?.detalle || [];
+          resolve(detalle);
         } catch (e) {
           reject(new Error(`Error parseando respuesta BCRA: ${e.message}`));
         }
