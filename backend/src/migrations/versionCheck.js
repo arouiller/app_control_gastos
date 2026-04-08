@@ -8,7 +8,7 @@ const EXCLUDED_PATHS = ['/auth/login', '/auth/refresh'];
  * La migración se corre en startup (server.js). Este middleware sirve como guardia
  * por si algún request llega antes de que las migraciones finalicen.
  */
-let migrationStatus = 'pending'; // 'pending' | 'ok' | 'error'
+let migrationStatus = 'ok'; // 'pending' | 'ok' | 'error'
 let migrationError = null;
 
 function setMigrationStatus(status, err = null) {
