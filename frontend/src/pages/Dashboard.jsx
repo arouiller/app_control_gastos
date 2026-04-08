@@ -15,18 +15,21 @@ import { PAYMENT_METHOD_LABELS } from '../utils/constants'
 
 // ─── Custom pie label ─────────────────────────────────────────────────────────
 const RADIAN = Math.PI / 180
-function PieLabel({ cx, cy, midAngle, outerRadius, percent, value }) {
+function PieLabel({ cx, cy, midAngle, outerRadius, percent, value, name }) {
   if (percent < 0.04) return null
-  const radius = outerRadius + 38
+  const radius = outerRadius + 42
   const x = cx + radius * Math.cos(-midAngle * RADIAN)
   const y = cy + radius * Math.sin(-midAngle * RADIAN)
   const anchor = x > cx ? 'start' : 'end'
   return (
     <g>
-      <text x={x} y={y - 7} textAnchor={anchor} dominantBaseline="central" fill="#374151" fontSize={10} fontWeight="600">
+      <text x={x} y={y - 11} textAnchor={anchor} dominantBaseline="central" fill="#111827" fontSize={10} fontWeight="700">
+        {name}
+      </text>
+      <text x={x} y={y + 2} textAnchor={anchor} dominantBaseline="central" fill="#374151" fontSize={10} fontWeight="600">
         {`${(percent * 100).toFixed(1)}%`}
       </text>
-      <text x={x} y={y + 7} textAnchor={anchor} dominantBaseline="central" fill="#6B7280" fontSize={9}>
+      <text x={x} y={y + 14} textAnchor={anchor} dominantBaseline="central" fill="#6B7280" fontSize={9}>
         {formatCurrency(value)}
       </text>
     </g>
