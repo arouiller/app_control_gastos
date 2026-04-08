@@ -181,7 +181,7 @@ export default function Expenses() {
                     <td className="px-4 py-3">
                       <div>
                         <p className="text-sm font-medium text-primary">{expense.description}</p>
-                        {expense.is_installment && <Badge variant="info" className="mt-0.5 text-xs">En cuotas</Badge>}
+                        {expense.is_installment === true && <Badge variant="info" className="mt-0.5 text-xs">En cuotas</Badge>}
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
