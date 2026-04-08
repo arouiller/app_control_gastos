@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { analyticsService } from '../services/analyticsService'
 import Card, { CardTitle } from '../components/UI/Card'
@@ -48,6 +49,12 @@ export default function Reports() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-primary">Reportes</h1>
+        <Link
+          to="/reports/monthly-grouping"
+          className="text-sm font-medium text-secondary hover:underline"
+        >
+          Agrupamiento mensual →
+        </Link>
       </div>
 
       {/* Date range selector */}

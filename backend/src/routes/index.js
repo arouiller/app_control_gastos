@@ -9,5 +9,6 @@ router.use('/categories', require('./categories'));
 router.use('/expenses', require('./expenses'));
 router.use('/installments', require('./installments'));
 router.use('/analytics', require('./analytics'));
+router.use('/reports', require('./reports'));
 
 module.exports = router;
