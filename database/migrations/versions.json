@@ -1,0 +1,12 @@
+{
+  "versions": [
+    {
+      "version": "1.0.0",
+      "description": "Schema inicial - tablas, índices, vistas, triggers y versionado",
+      "releaseDate": "2026-04-08",
+      "estimatedTime": "< 1 minuto",
+      "breaking": false,
+      "notes": "Crea todo el esquema base de la aplicación"
+    }
+  ]
+}
