@@ -5,6 +5,7 @@ import { analyticsService } from '../services/analyticsService'
 import Card, { CardTitle } from '../components/UI/Card'
 import Button from '../components/UI/Button'
 import Input from '../components/UI/Input'
+import Select from '../components/UI/Select'
 import { PageLoader } from '../components/UI/LoadingSpinner'
 import { formatCurrency, formatPercent, startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
 import { toast } from 'react-toastify'
@@ -12,6 +13,7 @@ import { toast } from 'react-toastify'
 export default function Reports() {
   const [startDate, setStartDate] = useState(startOfCurrentMonth())
   const [endDate, setEndDate] = useState(endOfCurrentMonth())
+  const [displayCurrency, setDisplayCurrency] = useState('original')
   const [summary, setSummary] = useState(null)
   const [byCategory, setByCategory] = useState([])
   const [cashVsCard, setCashVsCard] = useState(null)
@@ -20,7 +22,7 @@ export default function Reports() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const params = { startDate, endDate }
+      const params = { startDate, endDate, displayCurrency }
       const [s, c, cvc] = await Promise.all([
         analyticsService.getSummary(params),
         analyticsService.getByCategory(params),
@@ -36,7 +38,7 @@ export default function Reports() {
     }
   }
 
-  useEffect(() => { loadData() }, [startDate, endDate])
+  useEffect(() => { loadData() }, [startDate, endDate, displayCurrency])
 
   if (loading) return <PageLoader />
 
@@ -57,7 +59,7 @@ export default function Reports() {
         </Link>
       </div>
 
-      {/* Date range selector */}
+      {/* Date range selector and currency */}
       <Card>
         <div className="flex flex-wrap gap-4 items-end">
           <Input
@@ -72,6 +74,18 @@ export default function Reports() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
+          <div className="w-48">
+            <Select
+              label="Mostrar en"
+              options={[
+                { value: 'original', label: 'Moneda original' },
+                { value: 'ARS', label: 'Pesos (ARS)' },
+                { value: 'USD', label: 'Dólares (USD)' },
+              ]}
+              value={displayCurrency}
+              onChange={(e) => setDisplayCurrency(e.target.value)}
+            />
+          </div>
           <Button variant="secondary" onClick={loadData}>Actualizar</Button>
         </div>
       </Card>
