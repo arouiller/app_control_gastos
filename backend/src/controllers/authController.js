@@ -1,10 +1,7 @@
 const jwt = require('jsonwebtoken');
-const { OAuth2Client } = require('google-auth-library');
 const { User, Session } = require('../models');
 const { success, created, error } = require('../utils/response');
 const { seedDefaultCategories } = require('./categoryController');
-
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const generateTokens = (userId) => {
   const accessToken = jwt.sign(
@@ -153,71 +150,4 @@ const forgotPassword = async (req, res, next) => {
   }
 };
 
-const googleAuth = async (req, res, next) => {
-  try {
-    const { credential } = req.body;
-    if (!credential) return error(res, 'Token de Google requerido', 400);
-
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-    const { email, name, sub: google_id } = payload;
-
-    // Find by google_id first, then by email for auto-link
-    let user = await User.findOne({ where: { google_id } });
-    if (!user) {
-      user = await User.findOne({ where: { email } });
-      if (user) {
-        await user.update({ google_id });
-      } else {
-        user = await User.create({ email, name, google_id });
-        await seedDefaultCategories(user.id);
-      }
-    }
-
-    if (!user.is_active) return error(res, 'Cuenta desactivada', 403);
-
-    const { accessToken, refreshToken } = generateTokens(user.id);
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-    await Session.create({ user_id: user.id, refresh_token: refreshToken, expires_at: expiresAt });
-
-    return res.status(200).json({
-      success: true,
-      data: user.toJSON(),
-      accessToken,
-      refreshToken,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-const linkGoogle = async (req, res, next) => {
-  try {
-    const { credential } = req.body;
-    if (!credential) return error(res, 'Token de Google requerido', 400);
-
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-    const { sub: google_id } = payload;
-
-    const existing = await User.findOne({ where: { google_id } });
-    if (existing && existing.id !== req.user.id) {
-      return error(res, 'Esta cuenta de Google ya está vinculada a otro usuario', 400);
-    }
-
-    await req.user.update({ google_id });
-
-    return success(res, req.user.toJSON(), 'Cuenta de Google vinculada exitosamente');
-  } catch (err) {
-    next(err);
-  }
-};
-
-module.exports = { register, login, logout, refreshToken, forgotPassword, googleAuth, linkGoogle };
+module.exports = { register, login, logout, refreshToken, forgotPassword };

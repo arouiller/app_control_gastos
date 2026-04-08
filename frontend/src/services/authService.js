@@ -17,12 +17,4 @@ export const authService = {
     const { data } = await api.post('/auth/forgot-password', { email })
     return data
   },
-  googleAuth: async (credential) => {
-    const { data } = await api.post('/auth/google', { credential })
-    return data
-  },
-  linkGoogle: async (credential) => {
-    const { data } = await api.post('/auth/google/link', { credential })
-    return data
-  },
 }

@@ -4,9 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
-import { GoogleLogin } from '@react-oauth/google'
 import { logoutUser, updateUser } from '../store/authSlice'
-import { authService } from '../services/authService'
 import { analyticsService } from '../services/analyticsService'
 import Card, { CardTitle } from '../components/UI/Card'
 import Input from '../components/UI/Input'
@@ -64,16 +62,6 @@ export default function Profile() {
       toast.error('Error al cambiar contraseña')
     } finally {
       setUpdatingPassword(false)
-    }
-  }
-
-  const onLinkGoogle = async ({ credential }) => {
-    try {
-      const res = await authService.linkGoogle(credential)
-      dispatch(updateUser(res.data))
-      toast.success('Cuenta de Google vinculada')
-    } catch (err) {
-      toast.error(err.response?.data?.error?.message || 'Error al vincular cuenta de Google')
     }
   }
 
@@ -148,21 +136,6 @@ export default function Profile() {
             Actualizar Contraseña
           </Button>
         </form>
-      </Card>
-
-      {/* Link Google */}
-      <Card>
-        <CardTitle className="mb-2">Google</CardTitle>
-        {user?.google_id ? (
-          <p className="text-sm text-neutral-darker">Cuenta de Google vinculada.</p>
-        ) : (
-          <>
-            <p className="text-sm text-neutral-darker mb-4">
-              Vincula tu cuenta de Google para poder iniciar sesión con ella.
-            </p>
-            <GoogleLogin onSuccess={onLinkGoogle} onError={() => toast.error('Error al vincular cuenta de Google')} text="signin_with" locale="es" />
-          </>
-        )}
       </Card>
 
       {/* Logout */}

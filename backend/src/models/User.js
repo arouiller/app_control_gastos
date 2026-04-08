@@ -16,12 +16,7 @@ module.exports = (sequelize) => {
     },
     password_hash: {
       type: DataTypes.STRING(255),
-      allowNull: true,
-    },
-    google_id: {
-      type: DataTypes.STRING(255),
-      allowNull: true,
-      unique: true,
+      allowNull: false,
     },
     name: {
       type: DataTypes.STRING(100),
@@ -42,7 +37,6 @@ module.exports = (sequelize) => {
   });
 
   User.prototype.validatePassword = async function (password) {
-    if (!this.password_hash) return false;
     return bcrypt.compare(password, this.password_hash);
   };
 
