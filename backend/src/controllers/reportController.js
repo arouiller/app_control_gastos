@@ -44,6 +44,8 @@ const monthlyGrouping = async (req, res, next) => {
       }
     }
 
+    // Exclude installment parent records to avoid double-counting:
+    // parents have is_installment=1 AND installment_group_id IS NULL
     const query = `
       SELECT
         DATE_FORMAT(e.date, '%Y-%m') AS month_key,
@@ -57,6 +59,7 @@ const monthlyGrouping = async (req, res, next) => {
         e.user_id = :userId
         AND DATE(e.date) BETWEEN :dateFrom AND :dateTo
         AND c.user_id = :userId
+        AND (e.is_installment = FALSE OR e.installment_group_id IS NOT NULL)
         ${categoryFilter}
       GROUP BY
         DATE_FORMAT(e.date, '%Y-%m'),
@@ -166,6 +169,11 @@ const monthlyGroupingDetails = async (req, res, next) => {
         user_id: userId,
         category_id: catId,
         date: { [Op.between]: [dateFrom, dateTo] },
+        // Exclude installment parents to avoid double-counting
+        [Op.or]: [
+          { is_installment: false },
+          { installment_group_id: { [Op.ne]: null } },
+        ],
       },
       order: [['date', 'DESC']],
       limit: limitNum,
