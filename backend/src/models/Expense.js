@@ -41,6 +41,14 @@ module.exports = (sequelize) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    total_installments: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    installment_number: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     installment_group_id: {
       type: DataTypes.INTEGER,
       allowNull: true,

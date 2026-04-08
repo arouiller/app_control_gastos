@@ -24,6 +24,7 @@ const baseSchema = z.object({
   paymentMethod: z.enum(['cash', 'credit_card']),
   notes: z.string().optional(),
   isInstallment: z.boolean().optional(),
+  installmentMode: z.enum(['total', 'perInstallment']).optional(),
   numberOfInstallments: z.string().optional(),
 })
 
@@ -43,12 +44,28 @@ export default function ExpenseForm() {
       date: today(),
       paymentMethod: 'cash',
       isInstallment: false,
+      installmentMode: 'total',
       currency: 'ARS',
     },
   })
 
   const paymentMethod = watch('paymentMethod')
   const isInstallment = watch('isInstallment')
+  const installmentMode = watch('installmentMode')
+  const amountValue = watch('amount')
+  const numberOfInstallments = watch('numberOfInstallments')
+  const currencyValue = watch('currency')
+
+  const installmentPreview = (() => {
+    if (!isInstallment || !numberOfInstallments || !amountValue) return null
+    const n = parseInt(numberOfInstallments)
+    const val = parseFloat(amountValue)
+    if (!n || n < 2 || n > 36 || isNaN(val) || val <= 0) return null
+    const perInstallment = installmentMode === 'perInstallment' ? val : val / n
+    const total = installmentMode === 'perInstallment' ? val * n : val
+    const fmt = (v) => v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return `${n} cuotas de ${fmt(perInstallment)} ${currencyValue} (total: ${fmt(total)} ${currencyValue})`
+  })()
 
   useEffect(() => {
     dispatch(fetchCategories())
@@ -94,9 +111,15 @@ export default function ExpenseForm() {
         await dispatch(updateExpense({ id, data: payload })).unwrap()
         toast.success('Gasto actualizado')
       } else if (data.isInstallment && data.numberOfInstallments) {
+        const n = parseInt(data.numberOfInstallments)
+        // If user entered per-installment amount, compute total before sending
+        const totalAmount = data.installmentMode === 'perInstallment'
+          ? parseFloat((payload.amount * n).toFixed(2))
+          : payload.amount
         await dispatch(createInstallmentExpense({
           ...payload,
-          numberOfInstallments: parseInt(data.numberOfInstallments),
+          amount: totalAmount,
+          numberOfInstallments: n,
         })).unwrap()
         toast.success('Gasto en cuotas registrado')
       } else {
@@ -191,32 +214,59 @@ export default function ExpenseForm() {
           </div>
 
           {!isEditing && paymentMethod === 'credit_card' && (
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-primary">¿En cuotas?</label>
-              <div className="flex gap-4">
-                {[{ v: false, l: 'No' }, { v: true, l: 'Sí' }].map(({ v, l }) => (
-                  <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={isInstallment === v}
-                      onChange={() => setValue('isInstallment', v)}
-                      className="text-secondary"
-                    />
-                    <span className="text-sm">{l}</span>
-                  </label>
-                ))}
+            <div className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg border border-neutral">
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-primary">¿En cuotas?</label>
+                <div className="flex gap-4">
+                  {[{ v: false, l: 'No' }, { v: true, l: 'Sí' }].map(({ v, l }) => (
+                    <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={isInstallment === v}
+                        onChange={() => setValue('isInstallment', v)}
+                        className="text-secondary"
+                      />
+                      <span className="text-sm">{l}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               {isInstallment && (
-                <Input
-                  label="Número de cuotas"
-                  type="number"
-                  min="2"
-                  max="24"
-                  placeholder="Ej: 12"
-                  error={errors.numberOfInstallments?.message}
-                  {...register('numberOfInstallments')}
-                />
+                <>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-primary">El monto ingresado es</label>
+                    <div className="flex gap-4">
+                      {[{ v: 'total', l: 'Monto total' }, { v: 'perInstallment', l: 'Monto por cuota' }].map(({ v, l }) => (
+                        <label key={v} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            checked={installmentMode === v}
+                            onChange={() => setValue('installmentMode', v)}
+                            className="text-secondary"
+                          />
+                          <span className="text-sm">{l}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Input
+                    label="Número de cuotas"
+                    type="number"
+                    min="2"
+                    max="36"
+                    placeholder="Ej: 12"
+                    error={errors.numberOfInstallments?.message}
+                    {...register('numberOfInstallments')}
+                  />
+
+                  {installmentPreview && (
+                    <div className="text-sm font-medium text-secondary bg-secondary/10 px-3 py-2 rounded">
+                      Resumen: {installmentPreview}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

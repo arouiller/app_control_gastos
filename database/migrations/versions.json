@@ -39,6 +39,14 @@
       "estimatedTime": "< 1 minuto",
       "breaking": false,
       "notes": "Crea vista expenses_with_conversions que devuelve cada gasto en original, ARS y USD"
+    },
+    {
+      "version": "1.0.5",
+      "description": "REQ-005: Soporte de gastos en cuotas con estructura padre-hijo en expenses",
+      "releaseDate": "2026-04-08",
+      "estimatedTime": "< 1 minuto",
+      "breaking": false,
+      "notes": "Agrega total_installments e installment_number a expenses; actualiza vista expenses_with_conversions"
     }
   ]
 }

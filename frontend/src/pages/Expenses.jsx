@@ -38,6 +38,7 @@ export default function Expenses() {
       limit: 20,
       startDate: filters.startDate || startOfCurrentMonth(),
       endDate: filters.endDate || endOfCurrentMonth(),
+      showConsolidated: filters.showConsolidated,
       // Note: displayCurrency is NOT sent to backend anymore - it's local state
     }))
   }, [dispatch, filters, page])
@@ -130,6 +131,15 @@ export default function Expenses() {
               value={displayCurrency}
               onChange={(e) => dispatch(setDisplayCurrency(e.target.value))}
             />
+            <Select
+              label="Vista de cuotas"
+              options={[
+                { value: 'false', label: 'Cuotas individuales' },
+                { value: 'true', label: 'Consolidadas (solo padre)' },
+              ]}
+              value={String(filters.showConsolidated)}
+              onChange={(e) => { dispatch(setFilters({ showConsolidated: e.target.value === 'true' })); setPage(1) }}
+            />
           </div>
           <div className="flex gap-3 mt-3">
             <div className="flex-1">
@@ -181,7 +191,16 @@ export default function Expenses() {
                     <td className="px-4 py-3">
                       <div>
                         <p className="text-sm font-medium text-primary">{expense.description}</p>
-                        {expense.is_installment === true && <Badge variant="info" className="mt-0.5 text-xs">En cuotas</Badge>}
+                        {expense.is_installment && expense.installment_number && (
+                          <Badge variant="info" className="mt-0.5 text-xs">
+                            Cuota {expense.installment_number}/{expense.total_installments}
+                          </Badge>
+                        )}
+                        {expense.is_installment && !expense.installment_number && (
+                          <Badge variant="warning" className="mt-0.5 text-xs">
+                            {expense.total_installments} cuotas
+                          </Badge>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
@@ -220,20 +239,33 @@ export default function Expenses() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => navigate(`/expenses/${expense.id}/edit`)}
-                          className="p-1.5 text-neutral-darker hover:text-secondary rounded transition-colors"
-                          title="Editar"
-                        >
-                          <FiEdit2 size={15} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(expense.id)}
-                          className="p-1.5 text-neutral-darker hover:text-danger rounded transition-colors"
-                          title="Eliminar"
-                        >
-                          <FiTrash2 size={15} />
-                        </button>
+                        {!expense.installment_group_id && (
+                          <button
+                            onClick={() => navigate(`/expenses/${expense.id}/edit`)}
+                            className="p-1.5 text-neutral-darker hover:text-secondary rounded transition-colors"
+                            title="Editar"
+                          >
+                            <FiEdit2 size={15} />
+                          </button>
+                        )}
+                        {!expense.installment_group_id && (
+                          <button
+                            onClick={() => setDeleteId(expense.id)}
+                            className="p-1.5 text-neutral-darker hover:text-danger rounded transition-colors"
+                            title="Eliminar"
+                          >
+                            <FiTrash2 size={15} />
+                          </button>
+                        )}
+                        {expense.installment_group_id && (
+                          <button
+                            onClick={() => navigate(`/expenses/${expense.installment_group_id}/edit`)}
+                            className="p-1.5 text-neutral-darker hover:text-secondary rounded transition-colors"
+                            title="Editar gasto padre"
+                          >
+                            <FiEdit2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
