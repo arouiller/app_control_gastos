@@ -1,49 +1,101 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiTrendingUp, FiTrendingDown, FiDollarSign, FiCreditCard, FiPlus, FiChevronUp, FiChevronDown, FiX } from 'react-icons/fi'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  FiTrendingUp, FiTrendingDown, FiDollarSign, FiCreditCard,
+  FiPlus, FiChevronUp, FiChevronDown, FiX,
+} from 'react-icons/fi'
+import {
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
 import { analyticsService } from '../services/analyticsService'
 import { expenseService } from '../services/expenseService'
 import Card, { CardTitle } from '../components/UI/Card'
 import { PageLoader } from '../components/UI/LoadingSpinner'
 import Button from '../components/UI/Button'
 import Badge from '../components/UI/Badge'
-import Select from '../components/UI/Select'
-import { formatCurrency, formatDate, startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
+import { formatCurrency, formatDate } from '../utils/formatters'
 import { getDisplayAmount } from '../utils/currencyHelpers'
 import { PAYMENT_METHOD_LABELS } from '../utils/constants'
 
-// ─── Custom pie label ─────────────────────────────────────────────────────────
-const RADIAN = Math.PI / 180
-function PieLabel({ cx, cy, midAngle, outerRadius, percent, value, name }) {
-  if (percent < 0.04) return null
-  const radius = outerRadius + 42
-  const x = cx + radius * Math.cos(-midAngle * RADIAN)
-  const y = cy + radius * Math.sin(-midAngle * RADIAN)
-  const anchor = x > cx ? 'start' : 'end'
+// ─── Month utils ──────────────────────────────────────────────────────────────
+const MONTH_NAMES_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+const buildMonths = (firstDate, lastDate) => {
+  const months = []
+  const start = new Date(firstDate + 'T00:00:00')
+  const end = new Date(lastDate + 'T00:00:00')
+  start.setDate(1)
+  end.setDate(1)
+  const cursor = new Date(start)
+  while (cursor <= end) {
+    const y = cursor.getFullYear()
+    const m = String(cursor.getMonth() + 1).padStart(2, '0')
+    const key = `${y}-${m}`
+    const lastDay = new Date(y, cursor.getMonth() + 1, 0).getDate()
+    months.push({
+      key,
+      label: `${MONTH_NAMES_ES[cursor.getMonth()]} ${y}`,
+      startDate: `${key}-01`,
+      endDate: `${key}-${String(lastDay).padStart(2, '0')}`,
+    })
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+  return months
+}
+
+const currentMonthPeriod = () => {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const key = `${y}-${m}`
+  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate()
+  return {
+    key,
+    label: `${MONTH_NAMES_ES[now.getMonth()]} ${y}`,
+    startDate: `${key}-01`,
+    endDate: `${key}-${String(lastDay).padStart(2, '0')}`,
+  }
+}
+
+// ─── Bar label (amount + %) ───────────────────────────────────────────────────
+function CatBarLabel({ x, y, width, value, index, data }) {
+  const entry = data?.[index]
+  if (!value || !entry) return null
   return (
     <g>
-      <text x={x} y={y - 11} textAnchor={anchor} dominantBaseline="central" fill="#111827" fontSize={10} fontWeight="700">
-        {name}
-      </text>
-      <text x={x} y={y + 2} textAnchor={anchor} dominantBaseline="central" fill="#374151" fontSize={10} fontWeight="600">
-        {`${(percent * 100).toFixed(1)}%`}
-      </text>
-      <text x={x} y={y + 14} textAnchor={anchor} dominantBaseline="central" fill="#6B7280" fontSize={9}>
+      <text x={x + width / 2} y={y - 13} textAnchor="middle" fill="#374151" fontSize={10} fontWeight="600">
         {formatCurrency(value)}
+      </text>
+      <text x={x + width / 2} y={y - 2} textAnchor="middle" fill="#9CA3AF" fontSize={9}>
+        {entry.percentage?.toFixed(1)}%
       </text>
     </g>
   )
 }
 
-// ─── Sortable column header ───────────────────────────────────────────────────
+// ─── Pie label ────────────────────────────────────────────────────────────────
+const RADIAN = Math.PI / 180
+function PieLabel({ cx, cy, midAngle, outerRadius, percent, value, name }) {
+  if (percent < 0.04) return null
+  const radius = outerRadius + 40
+  const x = cx + radius * Math.cos(-midAngle * RADIAN)
+  const y = cy + radius * Math.sin(-midAngle * RADIAN)
+  const anchor = x > cx ? 'start' : 'end'
+  return (
+    <g>
+      <text x={x} y={y - 10} textAnchor={anchor} dominantBaseline="central" fill="#111827" fontSize={10} fontWeight="700">{name}</text>
+      <text x={x} y={y + 2}  textAnchor={anchor} dominantBaseline="central" fill="#374151" fontSize={10} fontWeight="600">{`${(percent * 100).toFixed(1)}%`}</text>
+      <text x={x} y={y + 13} textAnchor={anchor} dominantBaseline="central" fill="#6B7280" fontSize={9}>{formatCurrency(value)}</text>
+    </g>
+  )
+}
+
+// ─── Sortable th ─────────────────────────────────────────────────────────────
 function SortTh({ label, field, sort, onSort }) {
   const active = sort.field === field
   return (
-    <th
-      onClick={() => onSort(field)}
-      className="text-left text-xs font-semibold text-neutral-darker px-3 py-2 cursor-pointer select-none hover:text-primary whitespace-nowrap"
-    >
+    <th onClick={() => onSort(field)} className="text-left text-xs font-semibold text-neutral-darker px-3 py-2 cursor-pointer select-none hover:text-primary whitespace-nowrap">
       <span className="flex items-center gap-1">
         {label}
         {active
@@ -58,18 +110,16 @@ function SortTh({ label, field, sort, onSort }) {
 function DetailTable({ expenses, sort, onSort, displayCurrency, showCategory }) {
   const sorted = [...expenses].sort((a, b) => {
     let av, bv
-    if (sort.field === 'date')        { av = a.date;                           bv = b.date }
+    if (sort.field === 'date')        { av = a.date;                          bv = b.date }
     else if (sort.field === 'amount') { av = getDisplayAmount(a, displayCurrency) || 0; bv = getDisplayAmount(b, displayCurrency) || 0 }
-    else if (sort.field === 'desc')   { av = a.description?.toLowerCase();     bv = b.description?.toLowerCase() }
-    else if (sort.field === 'cat')    { av = a.category?.name?.toLowerCase();  bv = b.category?.name?.toLowerCase() }
-    else if (sort.field === 'method') { av = a.payment_method;                 bv = b.payment_method }
+    else if (sort.field === 'desc')   { av = a.description?.toLowerCase();    bv = b.description?.toLowerCase() }
+    else if (sort.field === 'cat')    { av = a.category?.name?.toLowerCase(); bv = b.category?.name?.toLowerCase() }
+    else if (sort.field === 'method') { av = a.payment_method;                bv = b.payment_method }
     if (av < bv) return sort.dir === 'asc' ? -1 : 1
     if (av > bv) return sort.dir === 'asc' ?  1 : -1
     return 0
   })
-
   const th = (label, field) => <SortTh label={label} field={field} sort={sort} onSort={onSort} />
-
   return (
     <div className="overflow-x-auto rounded border border-neutral">
       <table className="w-full text-sm">
@@ -87,9 +137,7 @@ function DetailTable({ expenses, sort, onSort, displayCurrency, showCategory }) 
               <td className="px-3 py-2">
                 <span className="font-medium text-primary">{e.description}</span>
                 {!!e.is_installment && !!e.installment_number && (
-                  <span className="ml-1 text-xs text-neutral-darker">
-                    ({e.installment_number}/{e.total_installments})
-                  </span>
+                  <span className="ml-1 text-xs text-neutral-darker">({e.installment_number}/{e.total_installments})</span>
                 )}
               </td>
               <td className="px-3 py-2">
@@ -145,15 +193,16 @@ function SummaryCard({ title, value, subtitle, icon: Icon, trend, color = 'text-
   )
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
+  const [months, setMonths] = useState([])
+  const [activePeriod, setActivePeriod] = useState(null)
   const [allData, setAllData] = useState({ summary: null, byCategory: null, pendingInstallments: null, cashVsCard: null })
   const [loading, setLoading] = useState(true)
-  const [displayCurrency, setDisplayCurrency] = useState('original')
+  const [displayCurrency, setDisplayCurrency] = useState('ARS')
 
-  // Shared detail table state
-  const [selected, setSelected] = useState(null)   // { type: 'category'|'cvc', label, color?, method?, categoryId? }
+  const [selected, setSelected] = useState(null)
   const [detailExpenses, setDetailExpenses] = useState([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailSort, setDetailSort] = useState({ field: 'date', dir: 'desc' })
@@ -164,10 +213,37 @@ export default function Dashboard() {
     return data[key] || data
   }
 
+  // Load date range on mount → build month list
   useEffect(() => {
-    const load = async () => {
+    const init = async () => {
       try {
-        const params = { startDate: startOfCurrentMonth(), endDate: endOfCurrentMonth() }
+        const res = await expenseService.getDateRange()
+        const range = res.data
+        if (range?.firstDate && range?.lastDate) {
+          const built = buildMonths(range.firstDate, range.lastDate)
+          setMonths(built)
+          const cur = currentMonthPeriod()
+          const found = built.find((m) => m.key === cur.key)
+          setActivePeriod(found || built[built.length - 1])
+        } else {
+          setActivePeriod(currentMonthPeriod())
+        }
+      } catch {
+        setActivePeriod(currentMonthPeriod())
+      }
+    }
+    init()
+  }, [])
+
+  // Load analytics when period changes
+  useEffect(() => {
+    if (!activePeriod) return
+    const load = async () => {
+      setLoading(true)
+      setSelected(null)
+      setDetailExpenses([])
+      try {
+        const params = { startDate: activePeriod.startDate, endDate: activePeriod.endDate }
         const [summaryRes, catRes, installRes, cvcRes] = await Promise.all([
           analyticsService.getSummary(params),
           analyticsService.getByCategory(params),
@@ -182,23 +258,18 @@ export default function Dashboard() {
       }
     }
     load()
-  }, [])
+  }, [activePeriod])
 
   const handleSliceClick = useCallback(async (sliceMeta, apiParams) => {
-    // Toggle off if same slice clicked again
     if (selected?.key === sliceMeta.key) {
-      setSelected(null)
-      setDetailExpenses([])
-      return
+      setSelected(null); setDetailExpenses([]); return
     }
-    setSelected(sliceMeta)
-    setDetailExpenses([])
-    setDetailLoading(true)
+    setSelected(sliceMeta); setDetailExpenses([]); setDetailLoading(true)
     try {
       const res = await expenseService.getAll({
         ...apiParams,
-        startDate: startOfCurrentMonth(),
-        endDate: endOfCurrentMonth(),
+        startDate: activePeriod?.startDate,
+        endDate: activePeriod?.endDate,
         limit: 200,
       })
       setDetailExpenses(res.data || [])
@@ -207,7 +278,7 @@ export default function Dashboard() {
     } finally {
       setDetailLoading(false)
     }
-  }, [selected])
+  }, [selected, activePeriod])
 
   const handleCatClick = (data) =>
     handleSliceClick(
@@ -224,15 +295,15 @@ export default function Dashboard() {
   const handleSortDetail = (field) =>
     setDetailSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
 
-  if (loading) return <PageLoader />
+  if (!activePeriod) return <PageLoader />
 
   const summary = getDataByCurrency(allData.summary, displayCurrency)
   const byCategory = getDataByCurrency(allData.byCategory, displayCurrency)?.categories || []
   const pendingInstallments = getDataByCurrency(allData.pendingInstallments, displayCurrency) || { totalPending: 0, totalAmount: 0, installments: [] }
   const cashVsCard = getDataByCurrency(allData.cashVsCard, displayCurrency)
 
-  const cashTotal = cashVsCard?.summary.cashTotal || 0
-  const cardTotal = cashVsCard?.summary.cardTotal || 0
+  const cashTotal = cashVsCard?.summary?.cashTotal || 0
+  const cardTotal = cashVsCard?.summary?.cardTotal || 0
   const cvcGrand = cashTotal + cardTotal
   const cashVsCardData = cvcGrand > 0 ? [
     { name: 'Efectivo', value: cashTotal, color: '#10B981', method: 'cash' },
@@ -242,198 +313,224 @@ export default function Dashboard() {
   const isActive = (key) => selected?.key === key
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
-        <div className="flex gap-2 items-end">
-          <div className="w-48">
-            <Select
-              label="Mostrar en"
-              options={[
-                { value: 'original', label: 'Moneda original' },
-                { value: 'ARS',      label: 'Pesos (ARS)' },
-                { value: 'USD',      label: 'Dólares (USD)' },
-              ]}
-              value={displayCurrency}
-              onChange={(e) => setDisplayCurrency(e.target.value)}
-            />
-          </div>
-          <Button onClick={() => navigate('/expenses/new')} size="sm">
-            <FiPlus size={16} /> Nuevo Gasto
-          </Button>
-        </div>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard title="Gasto Total del Mes"  value={formatCurrency(summary?.totalExpenses || 0)} subtitle={`${summary?.totalTransactions || 0} transacciones`} icon={FiDollarSign} trend={summary?.comparisonWithPreviousMonth?.percentageChange} />
-        <SummaryCard title="Promedio Diario"       value={formatCurrency(summary?.averageDaily || 0)} icon={FiTrendingUp} />
-        <SummaryCard title="Total Efectivo"        value={formatCurrency(summary?.cashTotal || 0)} subtitle={`${summary?.cashPercentage || 0}% del total`} icon={FiDollarSign} color="text-success" />
-        <SummaryCard title="Total Tarjeta"         value={formatCurrency(summary?.cardTotal || 0)} subtitle={`${summary?.cardPercentage || 0}% del total`} icon={FiCreditCard} color="text-secondary" />
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Categories pie */}
-        <Card>
-          <CardTitle className="mb-1">Gastos por Categoría</CardTitle>
-          <p className="text-xs text-neutral-darker mb-3">Clic en una porción para ver el detalle</p>
-          {byCategory.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={byCategory}
-                  dataKey="totalAmount"
-                  nameKey="categoryName"
-                  cx="50%" cy="50%"
-                  outerRadius={75}
-                  labelLine
-                  label={PieLabel}
-                  onClick={handleCatClick}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {byCategory.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={entry.color || '#3B82F6'}
-                      stroke={isActive(`cat-${entry.categoryId}`) ? '#111827' : 'white'}
-                      strokeWidth={isActive(`cat-${entry.categoryId}`) ? 3 : 1}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v) => formatCurrency(v)} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-sm text-neutral-darker text-center py-16">Sin gastos este mes</p>
-          )}
-        </Card>
-
-        {/* Cash vs Card pie */}
-        <Card>
-          <CardTitle className="mb-1">Efectivo vs Tarjeta</CardTitle>
-          <p className="text-xs text-neutral-darker mb-3">Clic en una porción para ver el detalle</p>
-          {cashVsCardData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={cashVsCardData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%" cy="50%"
-                  outerRadius={75}
-                  labelLine
-                  label={PieLabel}
-                  onClick={handleCvcClick}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {cashVsCardData.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={entry.color}
-                      stroke={isActive(`cvc-${entry.method}`) ? '#111827' : 'white'}
-                      strokeWidth={isActive(`cvc-${entry.method}`) ? 3 : 1}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v) => formatCurrency(v)} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-sm text-neutral-darker text-center py-16">Sin gastos este mes</p>
-          )}
-        </Card>
-      </div>
-
-      {/* Shared detail table */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <CardTitle>
-              {selected
-                ? `Detalle — ${selected.label}`
-                : 'Detalle de gastos'}
-            </CardTitle>
-            {!selected && (
-              <p className="text-xs text-neutral-darker mt-1">
-                Hacé clic en una porción de cualquiera de los gráficos para ver el detalle aquí
-              </p>
-            )}
-          </div>
-          {selected && (
-            <button
-              onClick={() => { setSelected(null); setDetailExpenses([]) }}
-              className="p-1.5 text-neutral-darker hover:text-primary rounded transition-colors"
-              title="Cerrar detalle"
-            >
-              <FiX size={16} />
-            </button>
-          )}
-        </div>
-
-        {!selected && (
-          <div className="flex items-center justify-center py-10 text-neutral-darker">
-            <p className="text-sm">Sin selección</p>
-          </div>
-        )}
-
-        {selected && detailLoading && (
-          <p className="text-sm text-neutral-darker text-center py-8">Cargando...</p>
-        )}
-
-        {selected && !detailLoading && detailExpenses.length === 0 && (
-          <p className="text-sm text-neutral-darker text-center py-8">Sin gastos para esta selección</p>
-        )}
-
-        {selected && !detailLoading && detailExpenses.length > 0 && (
-          <>
-            <p className="text-xs text-neutral-darker mb-3">{detailExpenses.length} gasto{detailExpenses.length !== 1 ? 's' : ''}</p>
-            <DetailTable
-              expenses={detailExpenses}
-              sort={detailSort}
-              onSort={handleSortDetail}
-              displayCurrency={displayCurrency}
-              showCategory={selected.type === 'cvc'}
-            />
-          </>
-        )}
-      </Card>
-
-      {/* Pending installments */}
-      {pendingInstallments.totalPending > 0 && (
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <CardTitle>Cuotas Próximas (30 días)</CardTitle>
-            <Badge variant="warning">{pendingInstallments.totalPending} pendientes</Badge>
-          </div>
-          <div className="space-y-2">
-            {pendingInstallments.installments.slice(0, 5).map((inst) => (
-              <div key={inst.id} className="flex items-center justify-between py-2 border-b border-neutral last:border-0">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-primary truncate">{inst.description}</p>
-                  <p className="text-xs text-neutral-darker">
-                    Cuota {inst.installmentNumber}/{inst.totalInstallments} · Vence {formatDate(inst.dueDate)}
-                  </p>
-                </div>
-                <div className="ml-3 text-right flex-shrink-0">
-                  <p className="text-sm font-mono font-semibold text-primary">{formatCurrency(inst.amount)}</p>
-                  {inst.daysUntilDue <= 7 && (
-                    <Badge variant="warning" className="mt-0.5">
-                      {inst.daysUntilDue <= 0 ? 'Vencida' : `${inst.daysUntilDue}d`}
-                    </Badge>
-                  )}
-                </div>
-              </div>
+    <div className="flex gap-4 items-start">
+      {/* Month sidebar */}
+      {months.length > 0 && (
+        <div className="w-24 flex-shrink-0">
+          <div className="sticky top-4 max-h-[calc(100vh-100px)] overflow-y-auto flex flex-col gap-0.5 pr-1">
+            <p className="text-xs font-semibold text-neutral-darker px-2 pb-1 border-b border-neutral mb-1">Mes</p>
+            {months.map((m) => (
+              <button
+                key={m.key}
+                onClick={() => setActivePeriod(m)}
+                className={`text-xs px-2 py-1.5 rounded text-left whitespace-nowrap transition-colors ${
+                  activePeriod?.key === m.key
+                    ? 'bg-secondary text-white font-semibold'
+                    : 'text-primary hover:bg-neutral'
+                }`}
+              >
+                {m.label}
+              </button>
             ))}
           </div>
-          {pendingInstallments.totalPending > 5 && (
-            <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={() => navigate('/installments')}>
-              Ver todas ({pendingInstallments.totalPending})
-            </Button>
-          )}
-        </Card>
+        </div>
       )}
+
+      {/* Main content */}
+      <div className="flex-1 min-w-0 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
+            <p className="text-xs text-neutral-darker mt-0.5">{activePeriod.label}</p>
+          </div>
+          <div className="flex gap-2 items-center">
+            {/* Currency toggle */}
+            <div className="flex gap-0.5 bg-neutral rounded-lg p-1">
+              {[['ARS', '$'], ['USD', 'U$D']].map(([val, lbl]) => (
+                <button
+                  key={val}
+                  onClick={() => setDisplayCurrency(val)}
+                  className={`px-3 py-1.5 rounded text-xs font-bold transition-colors ${
+                    displayCurrency === val
+                      ? 'bg-secondary text-white shadow-sm'
+                      : 'text-neutral-darker hover:text-primary'
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <Button onClick={() => navigate('/expenses/new')} size="sm">
+              <FiPlus size={16} /> Nuevo Gasto
+            </Button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="py-16"><PageLoader /></div>
+        ) : (
+          <>
+            {/* Summary cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <SummaryCard title="Gasto Total del Mes"  value={formatCurrency(summary?.totalExpenses || 0)} subtitle={`${summary?.totalTransactions || 0} transacciones`} icon={FiDollarSign} trend={summary?.comparisonWithPreviousMonth?.percentageChange} />
+              <SummaryCard title="Promedio Diario"       value={formatCurrency(summary?.averageDaily || 0)} icon={FiTrendingUp} />
+              <SummaryCard title="Total Efectivo"        value={formatCurrency(summary?.cashTotal || 0)} subtitle={`${summary?.cashPercentage || 0}% del total`} icon={FiDollarSign} color="text-success" />
+              <SummaryCard title="Total Tarjeta"         value={formatCurrency(summary?.cardTotal || 0)} subtitle={`${summary?.cardPercentage || 0}% del total`} icon={FiCreditCard} color="text-secondary" />
+            </div>
+
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Category bar chart */}
+              <Card>
+                <CardTitle className="mb-1">Gastos por Categoría</CardTitle>
+                <p className="text-xs text-neutral-darker mb-3">Clic en una barra para ver el detalle</p>
+                {byCategory.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={byCategory} margin={{ top: 28, right: 4, left: 0, bottom: 45 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <XAxis dataKey="categoryName" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v) => formatCurrency(v)} />
+                      <Bar
+                        dataKey="totalAmount"
+                        name="Total"
+                        radius={[4, 4, 0, 0]}
+                        label={(props) => <CatBarLabel {...props} data={byCategory} />}
+                        onClick={handleCatClick}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {byCategory.map((entry, i) => (
+                          <Cell
+                            key={i}
+                            fill={entry.color || '#3B82F6'}
+                            opacity={selected && selected.type === 'category' && !isActive(`cat-${entry.categoryId}`) ? 0.35 : 1}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-neutral-darker text-center py-16">Sin gastos este mes</p>
+                )}
+              </Card>
+
+              {/* Cash vs Card pie + summary */}
+              <Card>
+                <CardTitle className="mb-1">Efectivo vs Tarjeta</CardTitle>
+                <p className="text-xs text-neutral-darker mb-3">Clic en una porción para ver el detalle</p>
+                {cashVsCardData.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={cashVsCardData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%" cy="50%"
+                          outerRadius={80}
+                          labelLine
+                          label={PieLabel}
+                          onClick={handleCvcClick}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {cashVsCardData.map((entry, i) => (
+                            <Cell
+                              key={i}
+                              fill={entry.color}
+                              stroke={isActive(`cvc-${entry.method}`) ? '#111827' : 'white'}
+                              strokeWidth={isActive(`cvc-${entry.method}`) ? 3 : 1}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v) => formatCurrency(v)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      {cashVsCardData.map((d) => (
+                        <div key={d.name} className="text-center">
+                          <p className="text-xs text-neutral-darker">{d.name}</p>
+                          <p className="text-sm font-semibold font-mono" style={{ color: d.color }}>{formatCurrency(d.value)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-neutral-darker text-center py-16">Sin gastos este mes</p>
+                )}
+              </Card>
+            </div>
+
+            {/* Shared detail table */}
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <CardTitle>{selected ? `Detalle — ${selected.label}` : 'Detalle de gastos'}</CardTitle>
+                  {!selected && <p className="text-xs text-neutral-darker mt-1">Hacé clic en una barra o porción del gráfico para ver el detalle aquí</p>}
+                </div>
+                {selected && (
+                  <button
+                    onClick={() => { setSelected(null); setDetailExpenses([]) }}
+                    className="p-1.5 text-neutral-darker hover:text-primary rounded transition-colors"
+                  >
+                    <FiX size={16} />
+                  </button>
+                )}
+              </div>
+              {!selected && <div className="flex items-center justify-center py-10 text-neutral-darker"><p className="text-sm">Sin selección</p></div>}
+              {selected && detailLoading && <p className="text-sm text-neutral-darker text-center py-8">Cargando...</p>}
+              {selected && !detailLoading && detailExpenses.length === 0 && <p className="text-sm text-neutral-darker text-center py-8">Sin gastos para esta selección</p>}
+              {selected && !detailLoading && detailExpenses.length > 0 && (
+                <>
+                  <p className="text-xs text-neutral-darker mb-3">{detailExpenses.length} gasto{detailExpenses.length !== 1 ? 's' : ''}</p>
+                  <DetailTable
+                    expenses={detailExpenses}
+                    sort={detailSort}
+                    onSort={handleSortDetail}
+                    displayCurrency={displayCurrency}
+                    showCategory={selected.type === 'cvc'}
+                  />
+                </>
+              )}
+            </Card>
+
+            {/* Pending installments */}
+            {pendingInstallments.totalPending > 0 && (
+              <Card>
+                <div className="flex items-center justify-between mb-4">
+                  <CardTitle>Cuotas Próximas (30 días)</CardTitle>
+                  <Badge variant="warning">{pendingInstallments.totalPending} pendientes</Badge>
+                </div>
+                <div className="space-y-2">
+                  {pendingInstallments.installments.slice(0, 5).map((inst) => (
+                    <div key={inst.id} className="flex items-center justify-between py-2 border-b border-neutral last:border-0">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-primary truncate">{inst.description}</p>
+                        <p className="text-xs text-neutral-darker">
+                          Cuota {inst.installmentNumber}/{inst.totalInstallments} · Vence {formatDate(inst.dueDate)}
+                        </p>
+                      </div>
+                      <div className="ml-3 text-right flex-shrink-0">
+                        <p className="text-sm font-mono font-semibold text-primary">{formatCurrency(inst.amount)}</p>
+                        {inst.daysUntilDue <= 7 && (
+                          <Badge variant="warning" className="mt-0.5">
+                            {inst.daysUntilDue <= 0 ? 'Vencida' : `${inst.daysUntilDue}d`}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {pendingInstallments.totalPending > 5 && (
+                  <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={() => navigate('/installments')}>
+                    Ver todas ({pendingInstallments.totalPending})
+                  </Button>
+                )}
+              </Card>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

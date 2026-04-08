@@ -8,7 +8,8 @@ router.use(authenticate);
 
 router.get('/', ctrl.listExpenses);
 
-// Currency conversion endpoint (must be before /:id to avoid route conflict)
+// Static endpoints must be before /:id to avoid route conflict
+router.get('/date-range', ctrl.getDateRange);
 router.get('/convert', ctrl.convertAdhoc);
 
 router.get('/:id', ctrl.getExpense);

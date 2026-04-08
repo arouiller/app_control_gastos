@@ -479,6 +479,19 @@ const deleteExpense = async (req, res, next) => {
   }
 };
 
+const getDateRange = async (req, res, next) => {
+  try {
+    const [result] = await sequelize.query(
+      `SELECT MIN(DATE(date)) as firstDate, MAX(DATE(date)) as lastDate
+       FROM expenses WHERE user_id = ?`,
+      { replacements: [req.user.id], type: sequelize.QueryTypes.SELECT }
+    );
+    return success(res, { firstDate: result.firstDate, lastDate: result.lastDate });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const convertAdhoc = async (req, res, next) => {
   try {
     const { amount, from_currency, to_currency, date } = req.query;
@@ -513,4 +526,4 @@ const convertAdhoc = async (req, res, next) => {
   }
 };
 
-module.exports = { listExpenses, getExpense, createExpense, createInstallmentExpense, updateExpense, deleteExpense, convertAdhoc };
+module.exports = { listExpenses, getExpense, createExpense, createInstallmentExpense, updateExpense, deleteExpense, convertAdhoc, getDateRange };

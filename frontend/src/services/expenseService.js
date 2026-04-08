@@ -29,4 +29,8 @@ export const expenseService = {
     const { data } = await api.get('/expenses/convert', { params })
     return data
   },
+  getDateRange: async () => {
+    const { data } = await api.get('/expenses/date-range')
+    return data
+  },
 }
