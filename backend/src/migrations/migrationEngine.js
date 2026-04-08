@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 
 const MIGRATIONS_DIR = path.resolve(__dirname, '../../../database/migrations');
 const VERSIONS_FILE = path.join(MIGRATIONS_DIR, 'versions.json');
+const MIGRATION_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutos máximo
 
 // ─── Tablas de versionado ────────────────────────────────────────────────────
 
@@ -192,7 +193,7 @@ async function runMigrations(currentVersion, targetVersion) {
 
 // ─── Punto de entrada ─────────────────────────────────────────────────────────
 
-async function checkAndMigrate() {
+async function _doCheckAndMigrate() {
   await bootstrapVersioningTables();
 
   const current = await getCurrentVersion();
@@ -211,6 +212,16 @@ async function checkAndMigrate() {
   await runMigrations(current, expected);
 
   logger.info(`[Migraciones] Completado en ${Date.now() - t0}ms. Versión: ${expected}`);
+}
+
+async function checkAndMigrate() {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(
+      () => reject(new Error(`Timeout: las migraciones tardaron más de ${MIGRATION_TIMEOUT_MS / 1000}s`)),
+      MIGRATION_TIMEOUT_MS
+    )
+  );
+  return Promise.race([_doCheckAndMigrate(), timeout]);
 }
 
 module.exports = { checkAndMigrate, getCurrentVersion, getExpectedVersion };
