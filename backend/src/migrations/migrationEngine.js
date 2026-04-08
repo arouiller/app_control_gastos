@@ -98,12 +98,14 @@ function splitSqlStatements(sql) {
   let depth = 0;
 
   for (const line of sql.split('\n')) {
-    const upper = line.trim().toUpperCase();
-    const withoutComment = line.replace(/--.*$/, '').trim();
+    const trimmed = line.trim();
+    const trimmedUpper = trimmed.toUpperCase();
+    const withoutComment = trimmed.replace(/--.*$/, '').trim();
 
-    // Rastrear profundidad de bloques BEGIN...END
-    if (/\bBEGIN\b/.test(upper) && !/\bEND\b/.test(upper)) depth++;
-    if (/\bEND\b/.test(upper) && !/\bBEGIN\b/.test(upper)) depth = Math.max(0, depth - 1);
+    // Solo contar BEGIN/END de bloques de cuerpo (trigger/procedure).
+    // END IF, END WHILE, END LOOP NO deben decrementar depth.
+    if (trimmedUpper === 'BEGIN' || trimmedUpper === 'BEGIN;') depth++;
+    if (trimmedUpper === 'END' || trimmedUpper === 'END;') depth = Math.max(0, depth - 1);
 
     current += line + '\n';
 
