@@ -15,6 +15,14 @@
       "estimatedTime": "< 1 minuto",
       "breaking": false,
       "notes": "Agrega is_admin a users; asigna admin a todos los usuarios existentes"
+    },
+    {
+      "version": "1.0.2",
+      "description": "Control de cotizaciones ARS/USD",
+      "releaseDate": "2026-04-08",
+      "estimatedTime": "< 1 minuto",
+      "breaking": false,
+      "notes": "Crea tablas exchange_rates y exchange_rate_logs para historial de cotizaciones diarias"
     }
   ]
 }
