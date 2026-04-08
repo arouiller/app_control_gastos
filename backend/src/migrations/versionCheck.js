@@ -1,27 +1,10 @@
-// Rutas (relativas a /api) exentas de la verificación de versión de BD
-// El middleware está montado en app.use('/api', versionCheckMiddleware, routes)
-// por lo que req.path aquí es relativo a /api (ej: '/auth/login', no '/api/auth/login')
-const EXCLUDED_PATHS = ['/auth/login', '/auth/refresh'];
+let migrationStatus = 'pending'; // 'pending' | 'ok' | 'error'
 
-/**
- * Middleware que bloquea requests si la base de datos no está en la versión correcta.
- * La migración se corre en startup (server.js). Este middleware sirve como guardia
- * por si algún request llega antes de que las migraciones finalicen.
- */
-let migrationStatus = 'ok'; // 'pending' | 'ok' | 'error'
-let migrationError = null;
-
-function setMigrationStatus(status, err = null) {
+function setMigrationStatus(status) {
   migrationStatus = status;
-  migrationError = err;
 }
 
-async function versionCheckMiddleware(req, res, next) {
-  // Rutas excluidas pasan siempre
-  if (EXCLUDED_PATHS.includes(req.path)) {
-    return next();
-  }
-
+function versionCheckMiddleware(_req, res, next) {
   if (migrationStatus === 'pending') {
     return res.status(503).json({
       success: false,
@@ -42,7 +25,6 @@ async function versionCheckMiddleware(req, res, next) {
     });
   }
 
-  // migrationStatus === 'ok' → continuar normalmente
   next();
 }
 
