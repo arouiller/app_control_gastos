@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { analyticsService } from '../services/analyticsService'
 import Card, { CardTitle } from '../components/UI/Card'
 import Button from '../components/UI/Button'
 import Input from '../components/UI/Input'
 import Select from '../components/UI/Select'
 import { PageLoader } from '../components/UI/LoadingSpinner'
-import { formatCurrency, formatPercent, startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
+import { formatCurrency, startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
 import { toast } from 'react-toastify'
 
 export default function Reports() {
@@ -16,7 +16,6 @@ export default function Reports() {
   const [displayCurrency, setDisplayCurrency] = useState('original')
   const [allData, setAllData] = useState({
     summary: null,
-    byCategory: null,
     cashVsCard: null,
   })
   const [loading, setLoading] = useState(true)
@@ -32,14 +31,12 @@ export default function Reports() {
     setLoading(true)
     try {
       const params = { startDate, endDate }
-      const [s, c, cvc] = await Promise.all([
+      const [s, cvc] = await Promise.all([
         analyticsService.getSummary(params),
-        analyticsService.getByCategory(params),
         analyticsService.getCashVsCard(params),
       ])
       setAllData({
         summary: s.data,
-        byCategory: c.data,
         cashVsCard: cvc.data,
       })
     } catch {
@@ -55,7 +52,6 @@ export default function Reports() {
 
   // Select data based on displayCurrency
   const summary = getDataByCurrency(allData.summary, displayCurrency)
-  const byCategory = getDataByCurrency(allData.byCategory, displayCurrency)?.categories || []
   const cashVsCard = getDataByCurrency(allData.cashVsCard, displayCurrency)
 
   const cashVsCardData = cashVsCard ? [
@@ -113,7 +109,7 @@ export default function Reports() {
             { label: 'Total Gastos', value: formatCurrency(summary.totalExpenses) },
             { label: 'Transacciones', value: summary.totalTransactions },
             { label: 'Promedio Diario', value: formatCurrency(summary.averageDaily) },
-            { label: 'Var. Mes Ant.', value: `${summary.comparisonWithPreviousMonth?.percentageChange > 0 ? '+' : ''}${formatPercent(summary.comparisonWithPreviousMonth?.percentageChange)}` },
+            { label: 'Var. Mes Ant.', value: `${summary.comparisonWithPreviousMonth?.percentageChange > 0 ? '+' : ''}${(summary.comparisonWithPreviousMonth?.percentageChange || 0).toFixed(1)}%` },
           ].map((s) => (
             <Card key={s.label}>
               <p className="text-xs text-neutral-darker">{s.label}</p>
@@ -125,28 +121,6 @@ export default function Reports() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Category bar chart */}
-        <Card>
-          <CardTitle className="mb-4">Gasto por Categoría</CardTitle>
-          {byCategory.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={byCategory} margin={{ top: 4, right: 4, left: 0, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="categoryName" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => formatCurrency(v)} />
-                <Bar dataKey="totalAmount" name="Total" radius={[4, 4, 0, 0]}>
-                  {byCategory.map((entry, i) => (
-                    <Cell key={i} fill={entry.color || '#3B82F6'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-sm text-neutral-darker text-center py-16">Sin datos para el período</p>
-          )}
-        </Card>
-
         {/* Cash vs Card Pie */}
         <Card>
           <CardTitle className="mb-4">Efectivo vs Tarjeta</CardTitle>
@@ -197,41 +171,6 @@ export default function Reports() {
         </Card>
       )}
 
-      {/* Category table */}
-      {byCategory.length > 0 && (
-        <Card>
-          <CardTitle className="mb-4">Detalle por Categoría</CardTitle>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-neutral">
-                  <th className="text-left text-xs font-semibold text-neutral-darker pb-2">Categoría</th>
-                  <th className="text-right text-xs font-semibold text-neutral-darker pb-2">Total</th>
-                  <th className="text-right text-xs font-semibold text-neutral-darker pb-2">%</th>
-                  <th className="text-right text-xs font-semibold text-neutral-darker pb-2 hidden sm:table-cell">Transacciones</th>
-                  <th className="text-right text-xs font-semibold text-neutral-darker pb-2 hidden sm:table-cell">Promedio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byCategory.map((cat) => (
-                  <tr key={cat.categoryId} className="border-b border-neutral last:border-0">
-                    <td className="py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                        <span className="text-sm text-primary">{cat.categoryName}</span>
-                      </div>
-                    </td>
-                    <td className="py-2 text-right font-mono text-sm text-primary">{formatCurrency(cat.totalAmount)}</td>
-                    <td className="py-2 text-right text-sm text-neutral-darker">{formatPercent(cat.percentage)}</td>
-                    <td className="py-2 text-right text-sm text-neutral-darker hidden sm:table-cell">{cat.transactionCount}</td>
-                    <td className="py-2 text-right font-mono text-sm text-neutral-darker hidden sm:table-cell">{formatCurrency(cat.averageTransaction)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
     </div>
   )
 }

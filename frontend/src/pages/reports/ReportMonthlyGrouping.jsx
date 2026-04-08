@@ -1,14 +1,111 @@
 import { useEffect, useState } from 'react'
+import { FiChevronUp, FiChevronDown, FiX } from 'react-icons/fi'
 import { useMonthlyReport } from '../../hooks/useMonthlyReport'
 import { categoryService } from '../../services/categoryService'
 import FilterPanel from '../../components/reports/FilterPanel'
 import MonthlyChart from '../../components/reports/MonthlyChart'
-import ExpenseDetailModal from '../../components/reports/ExpenseDetailModal'
 import Card, { CardTitle } from '../../components/UI/Card'
+import Badge from '../../components/UI/Badge'
 import { PageLoader } from '../../components/UI/LoadingSpinner'
-import { formatCurrency } from '../../utils/formatters'
+import { formatCurrency, formatDate } from '../../utils/formatters'
 import { toast } from 'react-toastify'
+import { PAYMENT_METHOD_LABELS } from '../../utils/constants'
 
+// ─── Sortable th ─────────────────────────────────────────────────────────────
+function SortTh({ label, field, sort, onSort }) {
+  const active = sort.field === field
+  return (
+    <th onClick={() => onSort(field)} className="text-left text-xs font-semibold text-neutral-darker px-3 py-2 cursor-pointer select-none hover:text-primary whitespace-nowrap">
+      <span className="flex items-center gap-1">
+        {label}
+        {active
+          ? (sort.dir === 'asc' ? <FiChevronUp size={12} /> : <FiChevronDown size={12} />)
+          : <FiChevronDown size={12} className="opacity-30" />}
+      </span>
+    </th>
+  )
+}
+
+// ─── Inline detail table ──────────────────────────────────────────────────────
+function InlineDetail({ detailData, loading, selectedMonth, selectedCategory, selectedMonthLabel, onClose }) {
+  const [sort, setSort] = useState({ field: 'date', dir: 'desc' })
+
+  const handleSort = (field) =>
+    setSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
+
+  const th = (label, field) => <SortTh label={label} field={field} sort={sort} onSort={handleSort} />
+
+  const expenses = detailData?.expenses || []
+  const sorted = [...expenses].sort((a, b) => {
+    let av, bv
+    if (sort.field === 'date')    { av = a.date;        bv = b.date }
+    if (sort.field === 'amount')  { av = a.amount || 0; bv = b.amount || 0 }
+    if (sort.field === 'desc')    { av = a.description?.toLowerCase(); bv = b.description?.toLowerCase() }
+    if (sort.field === 'method')  { av = a.paymentMethod; bv = b.paymentMethod }
+    if (av < bv) return sort.dir === 'asc' ? -1 : 1
+    if (av > bv) return sort.dir === 'asc' ?  1 : -1
+    return 0
+  })
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <CardTitle>
+            {selectedCategory?.name} — {selectedMonthLabel}
+          </CardTitle>
+          {detailData && (
+            <p className="text-xs text-neutral-darker mt-1">
+              {detailData.pagination?.total || expenses.length} gastos · Total: {formatCurrency(detailData.total || 0)}
+            </p>
+          )}
+        </div>
+        <button onClick={onClose} className="p-1.5 text-neutral-darker hover:text-primary rounded transition-colors">
+          <FiX size={16} />
+        </button>
+      </div>
+
+      {loading && <p className="text-sm text-neutral-darker text-center py-8">Cargando...</p>}
+
+      {!loading && expenses.length === 0 && (
+        <p className="text-sm text-neutral-darker text-center py-8">Sin gastos para esta selección</p>
+      )}
+
+      {!loading && expenses.length > 0 && (
+        <div className="overflow-x-auto rounded border border-neutral">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-neutral">
+              <tr>
+                {th('Descripción', 'desc')}
+                {th('Fecha', 'date')}
+                {th('Método', 'method')}
+                {th('Monto', 'amount')}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((e) => (
+                <tr key={e.id} className="border-b border-neutral last:border-0 hover:bg-gray-50">
+                  <td className="px-3 py-2 font-medium text-primary">{e.description}</td>
+                  <td className="px-3 py-2 text-neutral-darker whitespace-nowrap">{formatDate(e.date)}</td>
+                  <td className="px-3 py-2">
+                    <Badge variant={e.paymentMethod === 'cash' ? 'success' : 'info'} className="text-xs">
+                      {PAYMENT_METHOD_LABELS[e.paymentMethod]}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono font-semibold text-primary whitespace-nowrap">
+                    {formatCurrency(e.amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function ReportMonthlyGrouping() {
   const [categories, setCategories] = useState([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
@@ -27,7 +124,6 @@ export default function ReportMonthlyGrouping() {
     updateFilters,
     openDetailModal,
     closeDetailModal,
-    handleDeleteExpense,
   } = useMonthlyReport()
 
   useEffect(() => {
@@ -44,7 +140,6 @@ export default function ReportMonthlyGrouping() {
     openDetailModal(month, category)
   }
 
-  // Find month label for modal
   const selectedMonthLabel = selectedMonth && data
     ? data.monthLabels[data.months.indexOf(selectedMonth)]
     : null
@@ -64,9 +159,7 @@ export default function ReportMonthlyGrouping() {
       />
 
       {loading ? (
-        <div className="py-12">
-          <PageLoader />
-        </div>
+        <div className="py-12"><PageLoader /></div>
       ) : error ? (
         <Card>
           <p className="text-sm text-danger text-center py-4">{error}</p>
@@ -79,9 +172,7 @@ export default function ReportMonthlyGrouping() {
               <Card>
                 <p className="text-xs text-neutral-darker">Total período</p>
                 <p className="text-lg font-bold font-mono text-primary mt-1">
-                  {formatCurrency(
-                    Object.values(data.monthlyTotals).reduce((s, v) => s + v, 0)
-                  )}
+                  {formatCurrency(Object.values(data.monthlyTotals).reduce((s, v) => s + v, 0))}
                 </p>
               </Card>
               <Card>
@@ -92,9 +183,7 @@ export default function ReportMonthlyGrouping() {
               </Card>
               <Card>
                 <p className="text-xs text-neutral-darker">Categorías</p>
-                <p className="text-lg font-bold text-primary mt-1">
-                  {data.categories.length}
-                </p>
+                <p className="text-lg font-bold text-primary mt-1">{data.categories.length}</p>
               </Card>
               <Card>
                 <p className="text-xs text-neutral-darker">Promedio mensual</p>
@@ -102,8 +191,7 @@ export default function ReportMonthlyGrouping() {
                   {(() => {
                     const activeMonths = Object.values(data.monthlyTotals).filter((v) => v > 0)
                     if (activeMonths.length === 0) return formatCurrency(0)
-                    const total = activeMonths.reduce((s, v) => s + v, 0)
-                    return formatCurrency(total / activeMonths.length)
+                    return formatCurrency(activeMonths.reduce((s, v) => s + v, 0) / activeMonths.length)
                   })()}
                 </p>
               </Card>
@@ -116,64 +204,19 @@ export default function ReportMonthlyGrouping() {
             onBarClick={handleBarClick}
           />
 
-          {/* Category totals table */}
-          {data?.categories?.length > 0 && (
-            <Card>
-              <CardTitle className="mb-4">Totales por Categoría</CardTitle>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-neutral">
-                      <th className="text-left text-xs font-semibold text-neutral-darker pb-2">Categoría</th>
-                      <th className="text-right text-xs font-semibold text-neutral-darker pb-2">Total</th>
-                      <th className="text-right text-xs font-semibold text-neutral-darker pb-2 hidden sm:table-cell">%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const grandTotal = Object.values(data.categoryTotals).reduce((s, v) => s + v, 0)
-                      return data.categories
-                        .slice()
-                        .sort((a, b) => (data.categoryTotals[b.id] || 0) - (data.categoryTotals[a.id] || 0))
-                        .map((cat) => {
-                          const total = data.categoryTotals[String(cat.id)] || 0
-                          const pct = grandTotal > 0 ? ((total / grandTotal) * 100).toFixed(1) : '0.0'
-                          return (
-                            <tr key={cat.id} className="border-b border-neutral last:border-0">
-                              <td className="py-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                                  <span className="text-sm text-primary">{cat.name}</span>
-                                </div>
-                              </td>
-                              <td className="py-2 text-right font-mono text-sm text-primary">
-                                {formatCurrency(total)}
-                              </td>
-                              <td className="py-2 text-right text-sm text-neutral-darker hidden sm:table-cell">
-                                {pct}%
-                              </td>
-                            </tr>
-                          )
-                        })
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+          {/* Inline detail table — shown when a bar is clicked */}
+          {modalOpen && (
+            <InlineDetail
+              detailData={detailData}
+              loading={detailLoading}
+              selectedMonth={selectedMonth}
+              selectedCategory={selectedCategory}
+              selectedMonthLabel={selectedMonthLabel}
+              onClose={closeDetailModal}
+            />
           )}
         </>
       )}
-
-      <ExpenseDetailModal
-        isOpen={modalOpen}
-        month={selectedMonth}
-        monthLabel={selectedMonthLabel}
-        category={selectedCategory}
-        detailData={detailData}
-        loading={detailLoading}
-        onClose={closeDetailModal}
-        onDelete={handleDeleteExpense}
-      />
     </div>
   )
 }

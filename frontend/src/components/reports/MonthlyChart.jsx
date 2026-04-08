@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, Cell,
+  Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import Card, { CardTitle } from '../UI/Card'
 import { formatCurrency } from '../../utils/formatters'
@@ -47,7 +47,14 @@ export default function MonthlyChart({ data, categories, onBarClick }) {
     )
   }
 
-  const visibleCategories = categories.filter((cat) => !hiddenCategories[cat.id])
+  // Sort categories by total descending so largest is at the base of the stack
+  const categoryTotals = {}
+  data.forEach((point) => {
+    categories.forEach((cat) => {
+      categoryTotals[cat.id] = (categoryTotals[cat.id] || 0) + (point[`category_${cat.id}`] || 0)
+    })
+  })
+  const sortedCategories = [...categories].sort((a, b) => (categoryTotals[b.id] || 0) - (categoryTotals[a.id] || 0))
 
   return (
     <Card>
@@ -57,7 +64,6 @@ export default function MonthlyChart({ data, categories, onBarClick }) {
           data={data}
           margin={{ top: 4, right: 4, left: 0, bottom: 40 }}
           barCategoryGap="20%"
-          barGap={2}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
           <XAxis
@@ -88,13 +94,13 @@ export default function MonthlyChart({ data, categories, onBarClick }) {
               )
             }}
           />
-          {categories.map((cat) => (
+          {sortedCategories.map((cat) => (
             <Bar
               key={cat.id}
               dataKey={`category_${cat.id}`}
               name={cat.name}
               fill={cat.color}
-              radius={[3, 3, 0, 0]}
+              stackId="stack"
               hide={hiddenCategories[cat.id]}
               onClick={(payload) => {
                 if (onBarClick && payload) {
