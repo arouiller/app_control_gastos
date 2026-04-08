@@ -188,12 +188,55 @@ Frontend:
 
 ---
 
+### REQ-005: Gastos en Tarjeta de Crédito con Cuotas
+
+**Estado**: En Diseño  
+**Prioridad**: Alta  
+**Estimado**: 6 días de desarrollo
+
+Permitir registrar gastos en tarjeta de crédito divididos en múltiples cuotas (2-36), con edición flexible de cantidad de cuotas, monto total o monto por cuota. Los gastos en cuotas siguen los mismos lineamientos de visualización multimoneda que el resto del sistema.
+
+**Archivo**: [`REQ_005_GASTOS_TARJETA_CUOTAS.md`](REQ_005_GASTOS_TARJETA_CUOTAS.md)
+
+**Características principales**:
+- ✅ Registrar gasto con cantidad de cuotas (2-36)
+- ✅ Especificar monto total O monto por cuota (sistema calcula el otro)
+- ✅ Soportar ARS y USD en cuotas
+- ✅ Vista consolidada (gasto padre) o individual (cada cuota)
+- ✅ Edición del padre recalcula automáticamente todos los hijos
+- ✅ Conversión multimoneda coherente en cuotas
+- ✅ Reportes con opción de mostrar cuotas consolidadas o individuales
+- ✅ Eliminación en cascada de padre y todos sus hijos
+
+**Cambios de Base de Datos**:
+```
+Nueva columnas en tabla expenses:
+  - is_installment BOOLEAN (¿es gasto en cuotas?)
+  - total_installments INT (cantidad de cuotas)
+  - installment_number INT (cuota actual 1..N)
+  - installment_parent_id INT (FK a gasto padre)
+```
+
+**Dependencias**:
+- Depende de **REQ-004** (Gastos Multimoneda - conversiones)
+- Depende de **REQ-003** (Control de Cotizaciones)
+- Integración con **REQ-001** (Reportes)
+
+**Casos de uso principales**:
+1. Registrar compra de $12,000 en 12 cuotas (sistema crea 12 registros hijo)
+2. Ver consolidado (1 línea) o individual (12 líneas)
+3. Editar cantidad de cuotas y sistema recalcula automáticamente
+4. Ver conversión a otra moneda con cotización correcta
+5. Reportes con opción de vista consolidada/individual
+
+---
+
 ## Próximos Requerimientos (Planeados)
 
-- REQ-005: Exportación de reportes a PDF
-- REQ-006: Presupuestos por categoría
-- REQ-007: Alertas de gastos excesivos
-- REQ-008: Sincronización con cuentas bancarias
+- REQ-006: Exportación de reportes a PDF
+- REQ-007: Presupuestos por categoría
+- REQ-008: Alertas de gastos excesivos
+- REQ-009: Sincronización con cuentas bancarias
 
 ---
 
@@ -208,6 +251,7 @@ Frontend:
 
 ## Cambios en esta Carpeta
 
+- **2026-04-08**: Agregado REQ-005 (Gastos en Tarjeta de Crédito con Cuotas)
 - **2026-04-08**: Agregado REQ-004 (Gastos en Múltiples Monedas)
 - **2026-04-08**: Agregado REQ-003 (Control de Cotizaciones)
 - **2026-04-08**: Agregado REQ-002 (Versionado de BD y Migraciones)

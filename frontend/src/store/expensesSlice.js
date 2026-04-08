@@ -56,6 +56,7 @@ const expensesSlice = createSlice({
       paymentMethod: '',
       search: '',
       currency: '',
+      showConsolidated: false, // false = show individual installments (default per RF-512)
     },
     displayCurrency: 'original', // 'original' | 'ARS' | 'USD'
   },
@@ -64,7 +65,7 @@ const expensesSlice = createSlice({
       state.filters = { ...state.filters, ...action.payload }
     },
     clearFilters: (state) => {
-      state.filters = { startDate: '', endDate: '', categoryId: '', paymentMethod: '', search: '', currency: '' }
+      state.filters = { startDate: '', endDate: '', categoryId: '', paymentMethod: '', search: '', currency: '', showConsolidated: false }
     },
     setDisplayCurrency: (state, action) => {
       state.displayCurrency = action.payload

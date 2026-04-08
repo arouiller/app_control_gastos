@@ -1,9 +1,7 @@
 const { Op } = require('sequelize');
-const { Expense, Category, Installment } = require('../models');
+const { Expense, Category } = require('../models');
 const { success, created, error, paginated } = require('../utils/response');
-const { addMonths, format } = require('../utils/dateHelpers');
 const { convertAmount } = require('../services/currencyConversionService');
-const logger = require('../utils/logger');
 const { sequelize } = require('../models');
 
 const listExpenses = async (req, res, next) => {
@@ -12,12 +10,18 @@ const listExpenses = async (req, res, next) => {
       startDate, endDate, categoryId, paymentMethod,
       minAmount, maxAmount, search,
       page = 1, limit = 20, sort = '-expense_date',
-      currency,
+      currency, showConsolidated,
     } = req.query;
 
     // Build WHERE clause
     let whereClause = 'WHERE ewc.user_id = ?';
     const params = [req.user.id];
+
+    // RF-518: showConsolidated=true → only parent expenses (hide child installments)
+    // showConsolidated=false (default) → show all including individual installments
+    if (showConsolidated === 'true') {
+      whereClause += ' AND ewc.installment_group_id IS NULL';
+    }
 
     if (startDate || endDate) {
       if (startDate) {
@@ -80,6 +84,8 @@ const listExpenses = async (req, res, next) => {
         ewc.expense_date,
         ewc.payment_method,
         ewc.is_installment,
+        ewc.total_installments,
+        ewc.installment_number,
         ewc.installment_group_id,
         ewc.exchange_rate_used,
         ewc.exchange_rate_date,
@@ -116,6 +122,9 @@ const listExpenses = async (req, res, next) => {
       date: exp.expense_date,
       payment_method: exp.payment_method,
       is_installment: exp.is_installment,
+      total_installments: exp.total_installments ? parseInt(exp.total_installments) : null,
+      installment_number: exp.installment_number ? parseInt(exp.installment_number) : null,
+      installment_group_id: exp.installment_group_id,
       exchange_rate_used: exp.exchange_rate_used ? parseFloat(exp.exchange_rate_used) : null,
       exchange_rate_date: exp.exchange_rate_date,
       notes: exp.notes,
@@ -157,6 +166,8 @@ const getExpense = async (req, res, next) => {
         ewc.expense_date,
         ewc.payment_method,
         ewc.is_installment,
+        ewc.total_installments,
+        ewc.installment_number,
         ewc.installment_group_id,
         ewc.exchange_rate_used,
         ewc.exchange_rate_date,
@@ -179,11 +190,23 @@ const getExpense = async (req, res, next) => {
 
     if (!expenseData) return error(res, 'Gasto no encontrado', 404);
 
-    // Get installments if applicable
-    const installments = await Installment.findAll({
-      where: { expense_id: req.params.id },
-      order: [['installment_number', 'ASC']],
-    });
+    // RF-519: if parent installment expense, return children from expenses table
+    let installments = [];
+    if (expenseData.is_installment && !expenseData.installment_group_id) {
+      installments = await Expense.findAll({
+        where: { installment_group_id: expenseData.id },
+        order: [['installment_number', 'ASC']],
+        attributes: ['id', 'installment_number', 'total_installments', 'amount', 'currency', 'date', 'notes'],
+      });
+      installments = installments.map(i => i.toJSON());
+    }
+
+    const totalInstallments = expenseData.total_installments
+      ? parseInt(expenseData.total_installments)
+      : null;
+    const installmentAmount = totalInstallments
+      ? parseFloat((parseFloat(expenseData.original_amount) / totalInstallments).toFixed(2))
+      : null;
 
     // Format response
     const response = {
@@ -198,7 +221,10 @@ const getExpense = async (req, res, next) => {
       date: expenseData.expense_date,
       payment_method: expenseData.payment_method,
       is_installment: expenseData.is_installment,
+      total_installments: totalInstallments,
+      installment_number: expenseData.installment_number ? parseInt(expenseData.installment_number) : null,
       installment_group_id: expenseData.installment_group_id,
+      installment_amount: installmentAmount,
       exchange_rate_used: expenseData.exchange_rate_used ? parseFloat(expenseData.exchange_rate_used) : null,
       exchange_rate_date: expenseData.exchange_rate_date,
       notes: expenseData.notes,
@@ -208,7 +234,7 @@ const getExpense = async (req, res, next) => {
         color: expenseData.cat_color,
         icon: expenseData.cat_icon,
       } : null,
-      installments: installments.map(i => i.toJSON()),
+      installments,
     };
 
     return success(res, response);
@@ -246,7 +272,11 @@ const createExpense = async (req, res, next) => {
 
 const createInstallmentExpense = async (req, res, next) => {
   try {
-    const { description, amount, date, categoryId, paymentMethod, numberOfInstallments, notes, currency = 'ARS' } = req.body;
+    const {
+      description, amount, date, categoryId, paymentMethod,
+      numberOfInstallments, installmentAmount: installmentAmountInput,
+      notes, currency = 'ARS',
+    } = req.body;
 
     const category = await Category.findOne({
       where: { id: categoryId, user_id: req.user.id },
@@ -254,49 +284,60 @@ const createInstallmentExpense = async (req, res, next) => {
     if (!category) return error(res, 'Categoría no encontrada', 404);
 
     const numInstallments = parseInt(numberOfInstallments);
-    if (numInstallments < 1 || numInstallments > 24) {
-      return error(res, 'El número de cuotas debe ser entre 1 y 24', 400);
+    if (numInstallments < 2 || numInstallments > 36) {
+      return error(res, 'El número de cuotas debe ser entre 2 y 36', 400);
     }
 
-    const installmentAmount = parseFloat((parseFloat(amount) / numInstallments).toFixed(2));
+    // Determine total and per-installment amount
+    const totalAmount = parseFloat(amount);
+    const installmentAmount = parseFloat((totalAmount / numInstallments).toFixed(2));
 
-    // Create main expense
-    const mainExpense = await Expense.create({
-      user_id: req.user.id,
-      category_id: categoryId,
-      description,
-      amount,
-      currency,
-      date,
-      payment_method: paymentMethod || 'credit_card',
-      is_installment: true,
-      notes,
-    });
-
-    // Create installments
-    const startDate = new Date(date);
-    const installmentsData = [];
-    for (let i = 1; i <= numInstallments; i++) {
-      const dueDate = addMonths(startDate, i);
-      installmentsData.push({
-        expense_id: mainExpense.id,
-        installment_number: i,
+    const result = await sequelize.transaction(async (t) => {
+      // Create parent expense (total amount, installment_group_id = null)
+      const parent = await Expense.create({
+        user_id: req.user.id,
+        category_id: categoryId,
+        description,
+        amount: totalAmount,
+        currency,
+        date,
+        payment_method: paymentMethod || 'credit_card',
+        is_installment: true,
         total_installments: numInstallments,
-        amount: installmentAmount,
-        due_date: format(dueDate),
-        is_paid: false,
-      });
-    }
+        installment_number: null,
+        installment_group_id: null,
+        notes,
+      }, { transaction: t });
 
-    const installments = await Installment.bulkCreate(installmentsData);
+      // Create N child expenses
+      const childrenData = [];
+      for (let i = 1; i <= numInstallments; i++) {
+        childrenData.push({
+          user_id: req.user.id,
+          category_id: categoryId,
+          description,
+          amount: installmentAmount,
+          currency,
+          date,
+          payment_method: paymentMethod || 'credit_card',
+          is_installment: true,
+          total_installments: numInstallments,
+          installment_number: i,
+          installment_group_id: parent.id,
+          notes,
+        });
+      }
+      const children = await Expense.bulkCreate(childrenData, { transaction: t });
+
+      return { parent, children };
+    });
 
     return res.status(201).json({
       success: true,
       message: 'Gasto en cuotas registrado',
       data: {
-        installmentGroupId: mainExpense.id,
-        mainExpense,
-        installments,
+        ...result.parent.toJSON(),
+        installments: result.children.map(c => c.toJSON()),
       },
     });
   } catch (err) {
@@ -311,10 +352,15 @@ const updateExpense = async (req, res, next) => {
     });
     if (!expense) return error(res, 'Gasto no encontrado', 404);
 
-    const { description, amount, date, categoryId, paymentMethod, notes, currency } = req.body;
+    // RF-510: child installment expenses are not directly editable
+    if (expense.installment_group_id !== null) {
+      return error(res, 'No se puede editar una cuota individualmente. Edita el gasto padre.', 403);
+    }
+
+    const { description, amount, date, categoryId, paymentMethod, notes, currency, numberOfInstallments } = req.body;
     const updates = {};
     if (description !== undefined) updates.description = description;
-    if (amount !== undefined) updates.amount = amount;
+    if (amount !== undefined) updates.amount = parseFloat(amount);
     if (date !== undefined) updates.date = date;
     if (currency !== undefined) updates.currency = currency;
     if (categoryId !== undefined) {
@@ -324,6 +370,80 @@ const updateExpense = async (req, res, next) => {
     }
     if (paymentMethod !== undefined) updates.payment_method = paymentMethod;
     if (notes !== undefined) updates.notes = notes;
+
+    // RF-509: if it's a parent installment, update all children too
+    if (expense.is_installment && expense.installment_group_id === null) {
+      const newTotalInstallments = numberOfInstallments
+        ? parseInt(numberOfInstallments)
+        : expense.total_installments;
+
+      if (newTotalInstallments < 2 || newTotalInstallments > 36) {
+        return error(res, 'El número de cuotas debe ser entre 2 y 36', 400);
+      }
+
+      const newTotal = updates.amount || parseFloat(expense.amount);
+      const newInstallmentAmount = parseFloat((newTotal / newTotalInstallments).toFixed(2));
+
+      updates.total_installments = newTotalInstallments;
+
+      await sequelize.transaction(async (t) => {
+        await expense.update(updates, { transaction: t });
+
+        if (newTotalInstallments !== expense.total_installments) {
+          // Delete excess children (if reducing installments)
+          await Expense.destroy({
+            where: {
+              installment_group_id: expense.id,
+              installment_number: { [Op.gt]: newTotalInstallments },
+            },
+            transaction: t,
+          });
+        }
+
+        // Update or create children 1..newTotalInstallments
+        const existingChildren = await Expense.findAll({
+          where: { installment_group_id: expense.id },
+          transaction: t,
+        });
+        const existingByNumber = {};
+        existingChildren.forEach(c => { existingByNumber[c.installment_number] = c; });
+
+        const childUpdates = {};
+        if (description !== undefined) childUpdates.description = description;
+        if (date !== undefined) childUpdates.date = date;
+        if (currency !== undefined) childUpdates.currency = currency;
+        if (categoryId !== undefined) childUpdates.category_id = categoryId;
+        if (paymentMethod !== undefined) childUpdates.payment_method = paymentMethod;
+        if (notes !== undefined) childUpdates.notes = notes;
+        childUpdates.amount = newInstallmentAmount;
+        childUpdates.total_installments = newTotalInstallments;
+
+        for (let i = 1; i <= newTotalInstallments; i++) {
+          if (existingByNumber[i]) {
+            await existingByNumber[i].update(childUpdates, { transaction: t });
+          } else {
+            // Create new child if adding installments
+            await Expense.create({
+              user_id: req.user.id,
+              category_id: updates.category_id || expense.category_id,
+              description: updates.description || expense.description,
+              amount: newInstallmentAmount,
+              currency: updates.currency || expense.currency,
+              date: updates.date || expense.date,
+              payment_method: updates.payment_method || expense.payment_method,
+              is_installment: true,
+              total_installments: newTotalInstallments,
+              installment_number: i,
+              installment_group_id: expense.id,
+              notes: updates.notes !== undefined ? updates.notes : expense.notes,
+            }, { transaction: t });
+          }
+        }
+      });
+
+      await expense.reload();
+      return success(res, expense, 'Gasto actualizado');
+    }
 
     await expense.update(updates);
     return success(res, expense, 'Gasto actualizado');
@@ -339,7 +459,12 @@ const deleteExpense = async (req, res, next) => {
     });
     if (!expense) return error(res, 'Gasto no encontrado', 404);
 
-    await expense.destroy();
+    // RF-521: reject direct deletion of child installment
+    if (expense.installment_group_id !== null) {
+      return error(res, 'No se puede eliminar una cuota individualmente. Eliminá el gasto padre.', 403);
+    }
+
+    await expense.destroy(); // CASCADE FK deletes children automatically
     return success(res, null, 'Gasto eliminado');
   } catch (err) {
     next(err);
