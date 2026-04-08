@@ -7,6 +7,7 @@ import Card, { CardTitle } from '../components/UI/Card'
 import { PageLoader } from '../components/UI/LoadingSpinner'
 import Button from '../components/UI/Button'
 import Badge from '../components/UI/Badge'
+import Select from '../components/UI/Select'
 import { formatCurrency, formatDate, startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
 
 function SummaryCard({ title, value, subtitle, icon: Icon, trend, color = 'text-secondary' }) {
@@ -39,15 +40,16 @@ export default function Dashboard() {
   const [pendingInstallments, setPendingInstallments] = useState({ totalPending: 0, totalAmount: 0, installments: [] })
   const [cashVsCard, setCashVsCard] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [displayCurrency, setDisplayCurrency] = useState('original')
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const params = { startDate: startOfCurrentMonth(), endDate: endOfCurrentMonth() }
+        const params = { startDate: startOfCurrentMonth(), endDate: endOfCurrentMonth(), displayCurrency }
         const [summaryRes, catRes, installRes, cvcRes] = await Promise.all([
           analyticsService.getSummary(params),
           analyticsService.getByCategory(params),
-          analyticsService.getPendingInstallments({ daysAhead: 30 }),
+          analyticsService.getPendingInstallments({ daysAhead: 30, displayCurrency }),
           analyticsService.getCashVsCard(params),
         ])
         setSummary(summaryRes.data)
@@ -61,7 +63,7 @@ export default function Dashboard() {
       }
     }
     loadData()
-  }, [])
+  }, [displayCurrency])
 
   if (loading) return <PageLoader />
 
@@ -72,12 +74,26 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
-        <Button onClick={() => navigate('/expenses/new')} size="sm">
-          <FiPlus size={16} />
-          Nuevo Gasto
-        </Button>
+        <div className="flex gap-2 items-end">
+          <div className="w-48">
+            <Select
+              label="Mostrar en"
+              options={[
+                { value: 'original', label: 'Moneda original' },
+                { value: 'ARS', label: 'Pesos (ARS)' },
+                { value: 'USD', label: 'Dólares (USD)' },
+              ]}
+              value={displayCurrency}
+              onChange={(e) => setDisplayCurrency(e.target.value)}
+            />
+          </div>
+          <Button onClick={() => navigate('/expenses/new')} size="sm">
+            <FiPlus size={16} />
+            Nuevo Gasto
+          </Button>
+        </div>
       </div>
 
       {/* Summary cards */}
