@@ -80,15 +80,20 @@ async function startServer() {
     await sequelize.authenticate();
     logger.info('Conexión a base de datos establecida.');
 
-    await checkAndMigrate();
-    setMigrationStatus('ok');
+    try {
+      await checkAndMigrate();
+      setMigrationStatus('ok');
+    } catch (err) {
+      logger.error('[Migraciones] Error crítico en migración:', err);
+      setMigrationStatus('error', err);
+      // No se hace process.exit: el servidor arranca en estado 'error' para que los logs sean visibles
+    }
 
     app.listen(PORT, () => {
       logger.info(`Servidor corriendo en puerto ${PORT}`);
     });
   } catch (err) {
     logger.error('No se pudo iniciar el servidor:', err);
-    setMigrationStatus('error', err);
     process.exit(1);
   }
 }
