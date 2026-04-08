@@ -1,31 +1,21 @@
-import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
   FiHome, FiDollarSign, FiCreditCard, FiBarChart2,
-  FiTag, FiUser, FiX, FiShield, FiTrendingUp, FiChevronDown, FiChevronRight,
+  FiTag, FiUser, FiX, FiShield, FiTrendingUp,
 } from 'react-icons/fi'
 
-const REPORT_PATHS = ['/reports', '/reports/monthly-grouping']
-
-const reportSubItems = [
-  { to: '/reports',                  label: 'Resumen' },
-  { to: '/reports/monthly-grouping', label: 'Agrupamiento Mensual' },
-]
-
 const navItems = [
-  { to: '/dashboard',    label: 'Dashboard',   Icon: FiHome },
-  { to: '/expenses',     label: 'Gastos',       Icon: FiDollarSign },
-  { to: '/installments', label: 'Cuotas',       Icon: FiCreditCard },
-  { to: '/categories',   label: 'Categorías',   Icon: FiTag },
-  { to: '/profile',      label: 'Perfil',       Icon: FiUser },
+  { to: '/dashboard',              label: 'Dashboard',  Icon: FiHome },
+  { to: '/expenses',               label: 'Gastos',      Icon: FiDollarSign },
+  { to: '/installments',           label: 'Cuotas',      Icon: FiCreditCard },
+  { to: '/reports/monthly-grouping', label: 'Reportes',  Icon: FiBarChart2 },
+  { to: '/categories',             label: 'Categorías',  Icon: FiTag },
+  { to: '/profile',                label: 'Perfil',      Icon: FiUser },
 ]
 
 export default function Sidebar({ isOpen, onClose }) {
   const { user } = useSelector((state) => state.auth)
-  const location = useLocation()
-  const reportsActive = REPORT_PATHS.some((p) => location.pathname === p || location.pathname.startsWith(p + '/'))
-  const [reportsOpen, setReportsOpen] = useState(reportsActive)
 
   return (
     <>
@@ -82,45 +72,6 @@ export default function Sidebar({ isOpen, onClose }) {
                 </NavLink>
               </li>
             ))}
-
-            {/* Reportes — expandable */}
-            <li>
-              <button
-                onClick={() => setReportsOpen((o) => !o)}
-                className={`
-                  w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium
-                  transition-colors duration-200
-                  ${reportsActive ? 'bg-secondary-light text-secondary' : 'text-primary hover:bg-neutral'}
-                `}
-              >
-                <FiBarChart2 size={18} />
-                <span className="flex-1 text-left">Reportes</span>
-                {reportsOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
-              </button>
-
-              {reportsOpen && (
-                <ul className="mt-1 ml-7 space-y-0.5">
-                  {reportSubItems.map(({ to, label }) => (
-                    <li key={to}>
-                      <NavLink
-                        to={to}
-                        end
-                        onClick={onClose}
-                        className={({ isActive }) => `
-                          block px-3 py-2 rounded-md text-sm transition-colors duration-200
-                          ${isActive
-                            ? 'bg-secondary-light text-secondary font-medium'
-                            : 'text-neutral-darker hover:bg-neutral hover:text-primary'
-                          }
-                        `}
-                      >
-                        {label}
-                      </NavLink>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
           </ul>
 
           {/* Admin links */}

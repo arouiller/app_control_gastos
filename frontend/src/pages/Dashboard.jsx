@@ -203,6 +203,8 @@ export default function Dashboard() {
   const [displayCurrency, setDisplayCurrency] = useState('ARS')
 
   const [selected, setSelected] = useState(null)
+  const [allExpenses, setAllExpenses] = useState([])
+  const [allExpensesLoading, setAllExpensesLoading] = useState(false)
   const [detailExpenses, setDetailExpenses] = useState([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailSort, setDetailSort] = useState({ field: 'date', dir: 'desc' })
@@ -235,26 +237,31 @@ export default function Dashboard() {
     init()
   }, [])
 
-  // Load analytics when period changes
+  // Load analytics + all expenses when period changes
   useEffect(() => {
     if (!activePeriod) return
     const load = async () => {
       setLoading(true)
+      setAllExpensesLoading(true)
       setSelected(null)
       setDetailExpenses([])
+      setAllExpenses([])
       try {
         const params = { startDate: activePeriod.startDate, endDate: activePeriod.endDate }
-        const [summaryRes, catRes, installRes, cvcRes] = await Promise.all([
+        const [summaryRes, catRes, installRes, cvcRes, expensesRes] = await Promise.all([
           analyticsService.getSummary(params),
           analyticsService.getByCategory(params),
           analyticsService.getPendingInstallments({ daysAhead: 30 }),
           analyticsService.getCashVsCard(params),
+          expenseService.getAll({ ...params, limit: 200 }),
         ])
         setAllData({ summary: summaryRes.data, byCategory: catRes.data, pendingInstallments: installRes.data, cashVsCard: cvcRes.data })
+        setAllExpenses(expensesRes.data || [])
       } catch (err) {
         console.error(err)
       } finally {
         setLoading(false)
+        setAllExpensesLoading(false)
       }
     }
     load()
@@ -262,7 +269,9 @@ export default function Dashboard() {
 
   const handleSliceClick = useCallback(async (sliceMeta, apiParams) => {
     if (selected?.key === sliceMeta.key) {
-      setSelected(null); setDetailExpenses([]); return
+      setSelected(null)
+      setDetailExpenses([])
+      return
     }
     setSelected(sliceMeta); setDetailExpenses([]); setDetailLoading(true)
     try {
@@ -383,8 +392,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Category bar chart */}
               <Card>
-                <CardTitle className="mb-1">Gastos por Categoría</CardTitle>
-                <p className="text-xs text-neutral-darker mb-3">Clic en una barra para ver el detalle</p>
+                <CardTitle className="mb-4">Gastos por Categoría</CardTitle>
                 {byCategory.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={byCategory} margin={{ top: 28, right: 4, left: 0, bottom: 45 }}>
@@ -417,8 +425,7 @@ export default function Dashboard() {
 
               {/* Cash vs Card pie + summary */}
               <Card>
-                <CardTitle className="mb-1">Efectivo vs Tarjeta</CardTitle>
-                <p className="text-xs text-neutral-darker mb-3">Clic en una porción para ver el detalle</p>
+                <CardTitle className="mb-4">Efectivo vs Tarjeta</CardTitle>
                 {cashVsCardData.length > 0 ? (
                   <>
                     <ResponsiveContainer width="100%" height={220}>
@@ -462,37 +469,45 @@ export default function Dashboard() {
             </div>
 
             {/* Shared detail table */}
-            <Card>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <CardTitle>{selected ? `Detalle — ${selected.label}` : 'Detalle de gastos'}</CardTitle>
-                  {!selected && <p className="text-xs text-neutral-darker mt-1">Hacé clic en una barra o porción del gráfico para ver el detalle aquí</p>}
-                </div>
-                {selected && (
-                  <button
-                    onClick={() => { setSelected(null); setDetailExpenses([]) }}
-                    className="p-1.5 text-neutral-darker hover:text-primary rounded transition-colors"
-                  >
-                    <FiX size={16} />
-                  </button>
-                )}
-              </div>
-              {!selected && <div className="flex items-center justify-center py-10 text-neutral-darker"><p className="text-sm">Sin selección</p></div>}
-              {selected && detailLoading && <p className="text-sm text-neutral-darker text-center py-8">Cargando...</p>}
-              {selected && !detailLoading && detailExpenses.length === 0 && <p className="text-sm text-neutral-darker text-center py-8">Sin gastos para esta selección</p>}
-              {selected && !detailLoading && detailExpenses.length > 0 && (
-                <>
-                  <p className="text-xs text-neutral-darker mb-3">{detailExpenses.length} gasto{detailExpenses.length !== 1 ? 's' : ''}</p>
-                  <DetailTable
-                    expenses={detailExpenses}
-                    sort={detailSort}
-                    onSort={handleSortDetail}
-                    displayCurrency={displayCurrency}
-                    showCategory={selected.type === 'cvc'}
-                  />
-                </>
-              )}
-            </Card>
+            {(() => {
+              const displayExpenses = selected ? detailExpenses : allExpenses
+              const isLoadingDetail = selected ? detailLoading : allExpensesLoading
+              const title = selected ? `Detalle — ${selected.label}` : 'Gastos del mes'
+              return (
+                <Card>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <CardTitle>{title}</CardTitle>
+                      {!isLoadingDetail && (
+                        <p className="text-xs text-neutral-darker mt-1">
+                          {displayExpenses.length} gasto{displayExpenses.length !== 1 ? 's' : ''}
+                        </p>
+                      )}
+                    </div>
+                    {selected && (
+                      <button
+                        onClick={() => { setSelected(null); setDetailExpenses([]) }}
+                        className="p-1.5 text-neutral-darker hover:text-primary rounded transition-colors"
+                        title="Ver todos los gastos del mes"
+                      >
+                        <FiX size={16} />
+                      </button>
+                    )}
+                  </div>
+                  {isLoadingDetail && <p className="text-sm text-neutral-darker text-center py-8">Cargando...</p>}
+                  {!isLoadingDetail && displayExpenses.length === 0 && <p className="text-sm text-neutral-darker text-center py-8">Sin gastos para el período</p>}
+                  {!isLoadingDetail && displayExpenses.length > 0 && (
+                    <DetailTable
+                      expenses={displayExpenses}
+                      sort={detailSort}
+                      onSort={handleSortDetail}
+                      displayCurrency={displayCurrency}
+                      showCategory={selected?.type === 'cvc'}
+                    />
+                  )}
+                </Card>
+              )
+            })()}
 
             {/* Pending installments */}
             {pendingInstallments.totalPending > 0 && (

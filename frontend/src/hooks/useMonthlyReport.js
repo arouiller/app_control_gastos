@@ -4,6 +4,14 @@ import { reportService } from '../services/reportService'
 import { expenseService } from '../services/expenseService'
 import { toast } from 'react-toastify'
 
+const monthDateRange = (month) => {
+  const [year, monthNum] = month.split('-').map(Number)
+  const startDate = `${month}-01`
+  const lastDay = new Date(year, monthNum, 0).getDate()
+  const endDate = `${month}-${String(lastDay).padStart(2, '0')}`
+  return { startDate, endDate }
+}
+
 const buildChartData = (apiData) => {
   if (!apiData) return []
   const { months, monthLabels, categories } = apiData
@@ -94,6 +102,38 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
     }
   }, [])
 
+  const openMonthDetail = useCallback(async (month) => {
+    setSelectedMonth(month)
+    setSelectedCategory(null)
+    setModalOpen(true)
+    setDetailLoading(true)
+    setDetailData(null)
+    try {
+      const { startDate, endDate } = monthDateRange(month)
+      const response = await expenseService.getAll({ startDate, endDate, limit: 200 })
+      const items = response.data || []
+      setDetailData({
+        expenses: items.map((e) => ({
+          id: e.id,
+          description: e.description,
+          amount: parseFloat(e.original_amount || e.amount || 0),
+          date: e.date,
+          paymentMethod: e.payment_method,
+          isInstallment: !!e.is_installment,
+          installmentNumber: e.installment_number || null,
+          totalInstallments: e.total_installments || null,
+        })),
+        total: items.reduce((s, e) => s + parseFloat(e.original_amount || e.amount || 0), 0),
+        pagination: { total: items.length },
+      })
+    } catch {
+      toast.error('Error al cargar gastos del mes')
+      setModalOpen(false)
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [])
+
   const closeDetailModal = useCallback(() => {
     setModalOpen(false)
     setSelectedMonth(null)
@@ -134,6 +174,7 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
     detailLoading,
     updateFilters,
     openDetailModal,
+    openMonthDetail,
     closeDetailModal,
     handleDeleteExpense,
     refetchData: () => fetchData(filters),
