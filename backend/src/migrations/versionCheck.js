@@ -1,31 +1,26 @@
-let migrationStatus = 'pending'; // 'pending' | 'ok' | 'error'
+const { checkAndMigrate } = require('./migrationEngine');
+const logger = require('../utils/logger');
 
-function setMigrationStatus(status) {
-  migrationStatus = status;
-}
+let migrationPromise = null;
 
 function versionCheckMiddleware(_req, res, next) {
-  if (migrationStatus === 'pending') {
-    return res.status(503).json({
-      success: false,
-      error: {
-        code: 'DB_MIGRATION_IN_PROGRESS',
-        message: 'El sistema se está actualizando. Por favor, intente en unos segundos.',
-      },
-    });
+  if (!migrationPromise) {
+    logger.info('[Migraciones] Primer acceso detectado, iniciando migraciones...');
+    migrationPromise = checkAndMigrate();
   }
 
-  if (migrationStatus === 'error') {
-    return res.status(503).json({
-      success: false,
-      error: {
-        code: 'DB_MIGRATION_FAILED',
-        message: 'Error en la actualización del sistema. Contacte al administrador.',
-      },
+  migrationPromise
+    .then(() => next())
+    .catch((err) => {
+      logger.error('[Migraciones] Error crítico:', err.message);
+      res.status(503).json({
+        success: false,
+        error: {
+          code: 'DB_MIGRATION_FAILED',
+          message: 'Error en la actualización del sistema. Contacte al administrador.',
+        },
+      });
     });
-  }
-
-  next();
 }
 
-module.exports = { versionCheckMiddleware, setMigrationStatus };
+module.exports = { versionCheckMiddleware };
