@@ -4,82 +4,115 @@ const { success, created, error, paginated } = require('../utils/response');
 const { addMonths, format } = require('../utils/dateHelpers');
 const { convertAmount } = require('../services/currencyConversionService');
 const logger = require('../utils/logger');
+const { sequelize } = require('../models');
 
 const listExpenses = async (req, res, next) => {
   try {
     const {
       startDate, endDate, categoryId, paymentMethod,
       minAmount, maxAmount, search,
-      page = 1, limit = 20, sort = '-date',
-      currency, displayCurrency = 'original',
+      page = 1, limit = 20, sort = '-expense_date',
+      currency,
     } = req.query;
 
-    const where = { user_id: req.user.id };
+    // Build WHERE clause
+    let whereClause = 'WHERE ewc.user_id = ?';
+    const params = [req.user.id];
 
     if (startDate || endDate) {
-      where.date = {};
-      if (startDate) where.date[Op.gte] = startDate;
-      if (endDate) where.date[Op.lte] = endDate;
+      if (startDate) {
+        whereClause += ' AND ewc.expense_date >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        whereClause += ' AND ewc.expense_date <= ?';
+        params.push(endDate);
+      }
     }
-    if (categoryId) where.category_id = categoryId;
-    if (paymentMethod) where.payment_method = paymentMethod;
+    if (categoryId) {
+      whereClause += ' AND ewc.category_id = ?';
+      params.push(categoryId);
+    }
+    if (paymentMethod) {
+      whereClause += ' AND ewc.payment_method = ?';
+      params.push(paymentMethod);
+    }
     if (currency && ['ARS', 'USD'].includes(currency)) {
-      where.currency = currency;
+      whereClause += ' AND ewc.original_currency = ?';
+      params.push(currency);
     }
     if (minAmount || maxAmount) {
-      where.amount = {};
-      if (minAmount) where.amount[Op.gte] = parseFloat(minAmount);
-      if (maxAmount) where.amount[Op.lte] = parseFloat(maxAmount);
+      if (minAmount) {
+        whereClause += ' AND ewc.original_amount >= ?';
+        params.push(parseFloat(minAmount));
+      }
+      if (maxAmount) {
+        whereClause += ' AND ewc.original_amount <= ?';
+        params.push(parseFloat(maxAmount));
+      }
     }
     if (search) {
-      where.description = { [Op.like]: `%${search}%` };
+      whereClause += ' AND ewc.description LIKE ?';
+      params.push(`%${search}%`);
     }
 
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as count FROM expenses_with_conversions ewc ${whereClause}`;
+    const [countResult] = await sequelize.query(countQuery, { replacements: params });
+    const count = countResult[0].count;
+
+    // Determine sort
     const sortField = sort.startsWith('-') ? sort.slice(1) : sort;
     const sortDir = sort.startsWith('-') ? 'DESC' : 'ASC';
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    const { rows, count } = await Expense.findAndCountAll({
-      where,
-      include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'color', 'icon'] }],
-      order: [[sortField, sortDir]],
-      limit: parseInt(limit),
-      offset,
+    // Get expenses from view with category data
+    const dataQuery = `
+      SELECT
+        ewc.*,
+        c.id as 'category.id',
+        c.name as 'category.name',
+        c.color as 'category.color',
+        c.icon as 'category.icon'
+      FROM expenses_with_conversions ewc
+      LEFT JOIN categories c ON ewc.category_id = c.id
+      ${whereClause}
+      ORDER BY ewc.${sortField} ${sortDir}
+      LIMIT ? OFFSET ?
+    `;
+    params.push(parseInt(limit), offset);
+
+    const expenses = await sequelize.query(dataQuery, {
+      replacements: params,
+      type: sequelize.QueryTypes.SELECT,
     });
 
-    // Apply conversions if displayCurrency is requested
-    let expenses = rows;
-    if (displayCurrency && displayCurrency !== 'original') {
-      expenses = await Promise.all(
-        rows.map(async (expense) => {
-          const exp = expense.toJSON();
-
-          // Only convert if the currency is different from the display currency
-          if (exp.currency !== displayCurrency) {
-            try {
-              const conversion = await convertAmount(
-                exp.amount,
-                exp.currency,
-                displayCurrency,
-                exp.date
-              );
-              exp.converted_amount = conversion.convertedAmount;
-              exp.converted_currency = displayCurrency;
-              exp.exchange_rate = conversion.exchangeRate;
-              exp.exchange_rate_date = conversion.exchangeRateDate;
-            } catch (convErr) {
-              // Log the error but continue (RNF-405: no bloquear si falta cotización)
-              logger.warn(`[ListExpenses] Error convirtiendo gasto ${exp.id}: ${convErr.message}`);
-            }
-          }
-
-          return exp;
-        })
-      );
-    }
+    // Format response with nested category
+    const formattedExpenses = expenses.map(exp => ({
+      id: exp.id,
+      user_id: exp.user_id,
+      category_id: exp.category_id,
+      description: exp.description,
+      original_amount: parseFloat(exp.original_amount),
+      original_currency: exp.original_currency,
+      amount_in_ars: exp.amount_in_ars ? parseFloat(exp.amount_in_ars) : null,
+      amount_in_usd: exp.amount_in_usd ? parseFloat(exp.amount_in_usd) : null,
+      date: exp.expense_date,
+      payment_method: exp.payment_method,
+      is_installment: exp.is_installment,
+      exchange_rate_used: exp.exchange_rate_used ? parseFloat(exp.exchange_rate_used) : null,
+      exchange_rate_date: exp.exchange_rate_date,
+      notes: exp.notes,
+      category: exp['category.id'] ? {
+        id: exp['category.id'],
+        name: exp['category.name'],
+        color: exp['category.color'],
+        icon: exp['category.icon'],
+      } : null,
+    }));
 
     const totalPages = Math.ceil(count / parseInt(limit));
-    return paginated(res, expenses, {
+    return paginated(res, formattedExpenses, {
       page: parseInt(page),
       limit: parseInt(limit),
       total: count,
@@ -94,35 +127,59 @@ const listExpenses = async (req, res, next) => {
 
 const getExpense = async (req, res, next) => {
   try {
-    const expense = await Expense.findOne({
-      where: { id: req.params.id, user_id: req.user.id },
-      include: [
-        { model: Category, as: 'category', attributes: ['id', 'name', 'color', 'icon'] },
-        { model: Installment, as: 'installments', order: [['installment_number', 'ASC']] },
-      ],
+    // Get expense from view with conversions
+    const expenseQuery = `
+      SELECT
+        ewc.*,
+        c.id as 'category.id',
+        c.name as 'category.name',
+        c.color as 'category.color',
+        c.icon as 'category.icon'
+      FROM expenses_with_conversions ewc
+      LEFT JOIN categories c ON ewc.category_id = c.id
+      WHERE ewc.id = ? AND ewc.user_id = ?
+      LIMIT 1
+    `;
+    const [expenseData] = await sequelize.query(expenseQuery, {
+      replacements: [req.params.id, req.user.id],
+      type: sequelize.QueryTypes.SELECT,
     });
-    if (!expense) return error(res, 'Gasto no encontrado', 404);
 
-    const expenseData = expense.toJSON();
+    if (!expenseData) return error(res, 'Gasto no encontrado', 404);
 
-    // Add conversions to the response
-    try {
-      if (expenseData.currency === 'ARS') {
-        const convToUsd = await convertAmount(expenseData.amount, 'ARS', 'USD', expenseData.date);
-        expenseData.converted_to_usd = convToUsd.convertedAmount;
-        expenseData.exchange_rate_used = convToUsd.exchangeRate;
-        expenseData.exchange_rate_date = convToUsd.exchangeRateDate;
-      } else if (expenseData.currency === 'USD') {
-        const convToArs = await convertAmount(expenseData.amount, 'USD', 'ARS', expenseData.date);
-        expenseData.converted_to_ars = convToArs.convertedAmount;
-        expenseData.exchange_rate_used = convToArs.exchangeRate;
-        expenseData.exchange_rate_date = convToArs.exchangeRateDate;
-      }
-    } catch (convErr) {
-      logger.warn(`[GetExpense] Error convirtiendo gasto ${expenseData.id}: ${convErr.message}`);
-    }
+    // Get installments if applicable
+    const installments = await Installment.findAll({
+      where: { expense_id: req.params.id },
+      order: [['installment_number', 'ASC']],
+    });
 
-    return success(res, expenseData);
+    // Format response
+    const response = {
+      id: expenseData.id,
+      user_id: expenseData.user_id,
+      category_id: expenseData.category_id,
+      description: expenseData.description,
+      original_amount: parseFloat(expenseData.original_amount),
+      original_currency: expenseData.original_currency,
+      amount_in_ars: expenseData.amount_in_ars ? parseFloat(expenseData.amount_in_ars) : null,
+      amount_in_usd: expenseData.amount_in_usd ? parseFloat(expenseData.amount_in_usd) : null,
+      date: expenseData.expense_date,
+      payment_method: expenseData.payment_method,
+      is_installment: expenseData.is_installment,
+      installment_group_id: expenseData.installment_group_id,
+      exchange_rate_used: expenseData.exchange_rate_used ? parseFloat(expenseData.exchange_rate_used) : null,
+      exchange_rate_date: expenseData.exchange_rate_date,
+      notes: expenseData.notes,
+      category: expenseData['category.id'] ? {
+        id: expenseData['category.id'],
+        name: expenseData['category.name'],
+        color: expenseData['category.color'],
+        icon: expenseData['category.icon'],
+      } : null,
+      installments: installments.map(i => i.toJSON()),
+    };
+
+    return success(res, response);
   } catch (err) {
     next(err);
   }

@@ -45,11 +45,13 @@ export default function Dashboard() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const params = { startDate: startOfCurrentMonth(), endDate: endOfCurrentMonth(), displayCurrency }
+        // Note: displayCurrency is no longer sent to backend
+        // Backend returns original values; frontend calculates displayed values
+        const params = { startDate: startOfCurrentMonth(), endDate: endOfCurrentMonth() }
         const [summaryRes, catRes, installRes, cvcRes] = await Promise.all([
           analyticsService.getSummary(params),
           analyticsService.getByCategory(params),
-          analyticsService.getPendingInstallments({ daysAhead: 30, displayCurrency }),
+          analyticsService.getPendingInstallments({ daysAhead: 30 }),
           analyticsService.getCashVsCard(params),
         ])
         setSummary(summaryRes.data)
@@ -63,7 +65,7 @@ export default function Dashboard() {
       }
     }
     loadData()
-  }, [displayCurrency])
+  }, [])
 
   if (loading) return <PageLoader />
 

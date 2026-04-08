@@ -22,7 +22,9 @@ export default function Reports() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const params = { startDate, endDate, displayCurrency }
+      // Note: displayCurrency is NOT sent to backend anymore
+      // Backend returns original amounts; frontend calculates displayed values
+      const params = { startDate, endDate }
       const [s, c, cvc] = await Promise.all([
         analyticsService.getSummary(params),
         analyticsService.getByCategory(params),
@@ -38,7 +40,7 @@ export default function Reports() {
     }
   }
 
-  useEffect(() => { loadData() }, [startDate, endDate, displayCurrency])
+  useEffect(() => { loadData() }, [startDate, endDate])
 
   if (loading) return <PageLoader />
 

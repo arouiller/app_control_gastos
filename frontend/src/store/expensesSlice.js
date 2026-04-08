@@ -56,15 +56,18 @@ const expensesSlice = createSlice({
       paymentMethod: '',
       search: '',
       currency: '',
-      displayCurrency: 'original',
     },
+    displayCurrency: 'original', // 'original' | 'ARS' | 'USD'
   },
   reducers: {
     setFilters: (state, action) => {
       state.filters = { ...state.filters, ...action.payload }
     },
     clearFilters: (state) => {
-      state.filters = { startDate: '', endDate: '', categoryId: '', paymentMethod: '', search: '', currency: '', displayCurrency: 'original' }
+      state.filters = { startDate: '', endDate: '', categoryId: '', paymentMethod: '', search: '', currency: '' }
+    },
+    setDisplayCurrency: (state, action) => {
+      state.displayCurrency = action.payload
     },
     clearError: (state) => { state.error = null },
   },
@@ -88,5 +91,5 @@ const expensesSlice = createSlice({
   },
 })
 
-export const { setFilters, clearFilters, clearError } = expensesSlice.actions
+export const { setFilters, clearFilters, setDisplayCurrency, clearError } = expensesSlice.actions
 export default expensesSlice.reducer
