@@ -35,18 +35,25 @@ function SummaryCard({ title, value, subtitle, icon: Icon, trend, color = 'text-
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const [summary, setSummary] = useState(null)
-  const [byCategory, setByCategory] = useState([])
-  const [pendingInstallments, setPendingInstallments] = useState({ totalPending: 0, totalAmount: 0, installments: [] })
-  const [cashVsCard, setCashVsCard] = useState(null)
+  const [allData, setAllData] = useState({
+    summary: null,
+    byCategory: null,
+    pendingInstallments: null,
+    cashVsCard: null,
+  })
   const [loading, setLoading] = useState(true)
   const [displayCurrency, setDisplayCurrency] = useState('original')
+
+  // Helper to select data by currency
+  const getDataByCurrency = (data, currency) => {
+    if (!data) return null
+    const key = currency === 'original' ? 'byOriginalCurrency' : currency === 'ARS' ? 'inArs' : 'inUsd'
+    return data[key] || data
+  }
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Note: displayCurrency is no longer sent to backend
-        // Backend returns original values; frontend calculates displayed values
         const params = { startDate: startOfCurrentMonth(), endDate: endOfCurrentMonth() }
         const [summaryRes, catRes, installRes, cvcRes] = await Promise.all([
           analyticsService.getSummary(params),
@@ -54,10 +61,12 @@ export default function Dashboard() {
           analyticsService.getPendingInstallments({ daysAhead: 30 }),
           analyticsService.getCashVsCard(params),
         ])
-        setSummary(summaryRes.data)
-        setByCategory(catRes.data?.categories || [])
-        setPendingInstallments(installRes.data)
-        setCashVsCard(cvcRes.data)
+        setAllData({
+          summary: summaryRes.data,
+          byCategory: catRes.data,
+          pendingInstallments: installRes.data,
+          cashVsCard: cvcRes.data,
+        })
       } catch (err) {
         console.error(err)
       } finally {
@@ -68,6 +77,12 @@ export default function Dashboard() {
   }, [])
 
   if (loading) return <PageLoader />
+
+  // Select data based on displayCurrency
+  const summary = getDataByCurrency(allData.summary, displayCurrency)
+  const byCategory = getDataByCurrency(allData.byCategory, displayCurrency)?.categories || []
+  const pendingInstallments = getDataByCurrency(allData.pendingInstallments, displayCurrency) || { totalPending: 0, totalAmount: 0, installments: [] }
+  const cashVsCard = getDataByCurrency(allData.cashVsCard, displayCurrency)
 
   const cashVsCardData = cashVsCard ? [
     { name: 'Efectivo', value: cashVsCard.summary.cashTotal, color: '#10B981' },

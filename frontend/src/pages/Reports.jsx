@@ -14,25 +14,34 @@ export default function Reports() {
   const [startDate, setStartDate] = useState(startOfCurrentMonth())
   const [endDate, setEndDate] = useState(endOfCurrentMonth())
   const [displayCurrency, setDisplayCurrency] = useState('original')
-  const [summary, setSummary] = useState(null)
-  const [byCategory, setByCategory] = useState([])
-  const [cashVsCard, setCashVsCard] = useState(null)
+  const [allData, setAllData] = useState({
+    summary: null,
+    byCategory: null,
+    cashVsCard: null,
+  })
   const [loading, setLoading] = useState(true)
+
+  // Helper to select data by currency
+  const getDataByCurrency = (data, currency) => {
+    if (!data) return null
+    const key = currency === 'original' ? 'byOriginalCurrency' : currency === 'ARS' ? 'inArs' : 'inUsd'
+    return data[key] || data
+  }
 
   const loadData = async () => {
     setLoading(true)
     try {
-      // Note: displayCurrency is NOT sent to backend anymore
-      // Backend returns original amounts; frontend calculates displayed values
       const params = { startDate, endDate }
       const [s, c, cvc] = await Promise.all([
         analyticsService.getSummary(params),
         analyticsService.getByCategory(params),
         analyticsService.getCashVsCard(params),
       ])
-      setSummary(s.data)
-      setByCategory(c.data?.categories || [])
-      setCashVsCard(cvc.data)
+      setAllData({
+        summary: s.data,
+        byCategory: c.data,
+        cashVsCard: cvc.data,
+      })
     } catch {
       toast.error('Error al cargar reportes')
     } finally {
@@ -43,6 +52,11 @@ export default function Reports() {
   useEffect(() => { loadData() }, [startDate, endDate])
 
   if (loading) return <PageLoader />
+
+  // Select data based on displayCurrency
+  const summary = getDataByCurrency(allData.summary, displayCurrency)
+  const byCategory = getDataByCurrency(allData.byCategory, displayCurrency)?.categories || []
+  const cashVsCard = getDataByCurrency(allData.cashVsCard, displayCurrency)
 
   const cashVsCardData = cashVsCard ? [
     { name: 'Efectivo', value: cashVsCard.summary.cashTotal, color: '#10B981' },
