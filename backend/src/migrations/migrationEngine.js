@@ -50,13 +50,16 @@ async function getCurrentVersion() {
   }
 }
 
-function getExpectedVersion() {
-  return process.env.APP_VERSION || '1.0.0';
-}
-
 function getOrderedVersions() {
   const config = JSON.parse(fs.readFileSync(VERSIONS_FILE, 'utf8'));
   return config.versions.map((v) => v.version);
+}
+
+function getExpectedVersion() {
+  // La versión esperada es el último entry de versions.json.
+  // No depende de variables de entorno para evitar inconsistencias en deploys.
+  const versions = getOrderedVersions();
+  return versions[versions.length - 1];
 }
 
 function getVersionsBetween(from, to, allVersions) {
