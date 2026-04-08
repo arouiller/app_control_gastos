@@ -7,6 +7,14 @@
       "estimatedTime": "< 1 minuto",
       "breaking": false,
       "notes": "Crea todo el esquema base de la aplicación"
+    },
+    {
+      "version": "1.0.1",
+      "description": "Flag de administrador en usuarios",
+      "releaseDate": "2026-04-08",
+      "estimatedTime": "< 1 minuto",
+      "breaking": false,
+      "notes": "Agrega is_admin a users; asigna admin a todos los usuarios existentes"
     }
   ]
 }

@@ -10,5 +10,6 @@ router.use('/expenses', require('./expenses'));
 router.use('/installments', require('./installments'));
 router.use('/analytics', require('./analytics'));
 router.use('/reports', require('./reports'));
+router.use('/admin', require('./admin'));
 
 module.exports = router;
