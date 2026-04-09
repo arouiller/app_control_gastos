@@ -4,10 +4,8 @@ import Layout from './components/Layout/Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
-import Expenses from './pages/Expenses'
 import ExpenseForm from './pages/ExpenseForm'
 import Installments from './pages/Installments'
-import Reports from './pages/Reports'
 import ReportMonthlyGrouping from './pages/reports/ReportMonthlyGrouping'
 import Categories from './pages/Categories'
 import Profile from './pages/Profile'
@@ -42,7 +40,6 @@ export default function App() {
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="expenses" element={<Expenses />} />
         <Route path="expenses/new" element={<ExpenseForm />} />
         <Route path="expenses/:id/edit" element={<ExpenseForm />} />
         <Route path="installments" element={<Installments />} />

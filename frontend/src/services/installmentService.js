@@ -5,8 +5,16 @@ export const installmentService = {
     const { data } = await api.get('/installments', { params })
     return data
   },
-  pay: async (id, paymentData = {}) => {
-    const { data } = await api.put(`/installments/${id}/pay`, paymentData)
+  getGrouped: async (params = {}) => {
+    const { data } = await api.get('/installments/grouped', { params })
+    return data
+  },
+  getMonthlyChart: async (params = {}) => {
+    const { data } = await api.get('/installments/chart', { params })
+    return data
+  },
+  pay: async (id) => {
+    const { data } = await api.put(`/installments/${id}/pay`)
     return data
   },
   unpay: async (id) => {
