@@ -77,13 +77,28 @@ export default function ExpenseForm() {
       try {
         const res = await expenseService.getById(id)
         const e = res.data
+
+        // RF-510: child installments are not directly editable
+        if (e.installment_group_id) {
+          toast.error('No se puede editar una cuota individualmente. Editá el gasto padre.')
+          navigate('/expenses')
+          return
+        }
+
         setValue('description', e.description)
-        setValue('amount', String(e.amount))
-        setValue('currency', e.currency || 'ARS')
+        setValue('amount', String(e.original_amount))
+        setValue('currency', e.original_currency || 'ARS')
         setValue('date', e.date)
         setValue('categoryId', String(e.category_id))
         setValue('paymentMethod', e.payment_method)
         setValue('notes', e.notes || '')
+
+        // RF-509: populate installment fields for parent installment expenses
+        if (e.is_installment) {
+          setValue('isInstallment', true)
+          setValue('numberOfInstallments', String(e.total_installments))
+          setValue('installmentMode', 'total')
+        }
       } catch {
         toast.error('No se pudo cargar el gasto')
         navigate('/expenses')
@@ -108,7 +123,11 @@ export default function ExpenseForm() {
       }
 
       if (isEditing) {
-        await dispatch(updateExpense({ id, data: payload })).unwrap()
+        const updatePayload = { ...payload }
+        if (isInstallment && data.numberOfInstallments) {
+          updatePayload.numberOfInstallments = parseInt(data.numberOfInstallments)
+        }
+        await dispatch(updateExpense({ id, data: updatePayload })).unwrap()
         toast.success('Gasto actualizado')
       } else if (data.isInstallment && data.numberOfInstallments) {
         const n = parseInt(data.numberOfInstallments)
@@ -213,17 +232,18 @@ export default function ExpenseForm() {
             </div>
           </div>
 
-          {!isEditing && paymentMethod === 'credit_card' && (
+          {paymentMethod === 'credit_card' && (
             <div className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg border border-neutral">
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-primary">¿En cuotas?</label>
                 <div className="flex gap-4">
                   {[{ v: false, l: 'No' }, { v: true, l: 'Sí' }].map(({ v, l }) => (
-                    <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
+                    <label key={String(v)} className={`flex items-center gap-2 ${isEditing ? 'opacity-60' : 'cursor-pointer'}`}>
                       <input
                         type="radio"
                         checked={isInstallment === v}
-                        onChange={() => setValue('isInstallment', v)}
+                        onChange={() => !isEditing && setValue('isInstallment', v)}
+                        disabled={isEditing}
                         className="text-secondary"
                       />
                       <span className="text-sm">{l}</span>
