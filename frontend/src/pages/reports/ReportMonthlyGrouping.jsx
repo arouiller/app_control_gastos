@@ -133,12 +133,13 @@ function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabe
 export default function ReportMonthlyGrouping() {
   const [categories, setCategories] = useState([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
-  const [displayCurrency, setDisplayCurrency] = useState('ARS')
 
   const {
     filters,
     data,
     chartData,
+    displayCurrency,
+    setDisplayCurrency,
     loading,
     error,
     modalOpen,
@@ -202,36 +203,35 @@ export default function ReportMonthlyGrouping() {
       ) : (
         <>
           {/* Summary totals */}
-          {data && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Card>
-                <p className="text-xs text-neutral-darker">Total período</p>
-                <p className="text-lg font-bold font-mono text-primary mt-1">
-                  {formatCurrency(Object.values(data.monthlyTotals).reduce((s, v) => s + v, 0))}
-                </p>
-              </Card>
-              <Card>
-                <p className="text-xs text-neutral-darker">Meses con datos</p>
-                <p className="text-lg font-bold text-primary mt-1">
-                  {Object.values(data.monthlyTotals).filter((v) => v > 0).length}
-                </p>
-              </Card>
-              <Card>
-                <p className="text-xs text-neutral-darker">Categorías</p>
-                <p className="text-lg font-bold text-primary mt-1">{data.categories.length}</p>
-              </Card>
-              <Card>
-                <p className="text-xs text-neutral-darker">Promedio mensual</p>
-                <p className="text-lg font-bold font-mono text-primary mt-1">
-                  {(() => {
-                    const activeMonths = Object.values(data.monthlyTotals).filter((v) => v > 0)
-                    if (activeMonths.length === 0) return formatCurrency(0)
-                    return formatCurrency(activeMonths.reduce((s, v) => s + v, 0) / activeMonths.length)
-                  })()}
-                </p>
-              </Card>
-            </div>
-          )}
+          {data && (() => {
+            const monthlyTotals = displayCurrency === 'USD' ? data.monthlyTotalsUsd : data.monthlyTotalsArs
+            const totalsArr = Object.values(monthlyTotals || {})
+            const activeMonths = totalsArr.filter((v) => v > 0)
+            const grandTotal = totalsArr.reduce((s, v) => s + v, 0)
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <Card>
+                  <p className="text-xs text-neutral-darker">Total período</p>
+                  <p className="text-lg font-bold font-mono text-primary mt-1">{formatCurrency(grandTotal)}</p>
+                  <p className="text-xs text-neutral-darker mt-1">{displayCurrency}</p>
+                </Card>
+                <Card>
+                  <p className="text-xs text-neutral-darker">Meses con datos</p>
+                  <p className="text-lg font-bold text-primary mt-1">{activeMonths.length}</p>
+                </Card>
+                <Card>
+                  <p className="text-xs text-neutral-darker">Categorías</p>
+                  <p className="text-lg font-bold text-primary mt-1">{data.categories.length}</p>
+                </Card>
+                <Card>
+                  <p className="text-xs text-neutral-darker">Promedio mensual</p>
+                  <p className="text-lg font-bold font-mono text-primary mt-1">
+                    {formatCurrency(activeMonths.length > 0 ? grandTotal / activeMonths.length : 0)}
+                  </p>
+                </Card>
+              </div>
+            )
+          })()}
 
           <MonthlyChart
             data={chartData}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { format, startOfMonth, subMonths } from 'date-fns'
 import { reportService } from '../services/reportService'
 import { expenseService } from '../services/expenseService'
@@ -12,13 +12,15 @@ const monthDateRange = (month) => {
   return { startDate, endDate }
 }
 
-const buildChartData = (apiData) => {
+const buildChartData = (apiData, currency) => {
   if (!apiData) return []
   const { months, monthLabels, categories } = apiData
+  const totals = currency === 'USD' ? apiData.monthlyTotalsUsd : apiData.monthlyTotalsArs
+  const dataField = currency === 'USD' ? 'dataUsd' : 'dataArs'
   return months.map((month, i) => {
-    const entry = { month, monthLabel: monthLabels[i], total: apiData.monthlyTotals[month] || 0 }
+    const entry = { month, monthLabel: monthLabels[i], total: totals?.[month] || 0 }
     categories.forEach((cat) => {
-      entry[`category_${cat.id}`] = cat.data[i] || 0
+      entry[`category_${cat.id}`] = cat[dataField]?.[i] || 0
     })
     return entry
   })
@@ -34,7 +36,7 @@ const DEFAULT_FILTERS = {
 export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
   const [filters, setFilters] = useState(initialFilters)
   const [data, setData] = useState(null)
-  const [chartData, setChartData] = useState([])
+  const [displayCurrency, setDisplayCurrency] = useState('USD')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -57,7 +59,6 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
       }
       const response = await reportService.getMonthlyGrouped(params)
       setData(response.data)
-      setChartData(buildChartData(response.data))
     } catch (err) {
       const msg = err.response?.data?.error?.message || 'Error al cargar el reporte'
       setError(msg)
@@ -167,10 +168,14 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
     }
   }, [selectedMonth, selectedCategory, filters, fetchData])
 
+  const chartData = useMemo(() => buildChartData(data, displayCurrency), [data, displayCurrency])
+
   return {
     filters,
     data,
     chartData,
+    displayCurrency,
+    setDisplayCurrency,
     loading,
     error,
     modalOpen,
