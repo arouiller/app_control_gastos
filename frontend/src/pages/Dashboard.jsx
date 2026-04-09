@@ -308,7 +308,7 @@ export default function Dashboard() {
                   <BarChart data={byCategory} margin={{ top: 28, right: 4, left: 0, bottom: 45 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis dataKey="categoryName" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v.toFixed(0)}`} />
                     <Bar
                       dataKey="totalAmount"
                       name="Total"
