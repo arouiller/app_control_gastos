@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -58,6 +58,17 @@ export default function ExpenseForm() {
   const numberOfInstallments = watch('numberOfInstallments')
   const currencyValue = watch('currency')
 
+  const dateManuallyChanged = useRef(false)
+
+  const firstBusinessDayOfNextMonth = () => {
+    const d = new Date()
+    const first = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+    const day = first.getDay()
+    if (day === 0) first.setDate(2)
+    else if (day === 6) first.setDate(3)
+    return `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(first.getDate()).padStart(2, '0')}`
+  }
+
   const installmentPreview = (() => {
     if (!isInstallment || !numberOfInstallments || !amountValue) return null
     const n = parseInt(numberOfInstallments)
@@ -68,6 +79,12 @@ export default function ExpenseForm() {
     const fmt = (v) => v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     return `${n} cuotas de ${fmt(perInstallment)} ${currencyValue} (total: ${fmt(total)} ${currencyValue})`
   })()
+
+  useEffect(() => {
+    if (!isEditing && paymentMethod === 'credit_card' && !dateManuallyChanged.current) {
+      setValue('date', firstBusinessDayOfNextMonth())
+    }
+  }, [paymentMethod, isEditing, setValue])
 
   useEffect(() => {
     dispatch(fetchCategories())
@@ -94,6 +111,7 @@ export default function ExpenseForm() {
         setValue('categoryId', String(e.category_id))
         setValue('paymentMethod', e.payment_method)
         setValue('notes', e.notes || '')
+        dateManuallyChanged.current = true
 
         // RF-509: populate installment fields for parent installment expenses
         if (e.is_installment) {
@@ -217,14 +235,6 @@ export default function ExpenseForm() {
             {...register('categoryId')}
           />
 
-          <Input
-            label="Fecha"
-            type="date"
-            required
-            error={errors.date?.message}
-            {...register('date')}
-          />
-
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-primary">
               Método de Pago <span className="text-danger">*</span>
@@ -296,6 +306,16 @@ export default function ExpenseForm() {
               )}
             </div>
           )}
+
+          <Input
+            label="Fecha"
+            type="date"
+            required
+            error={errors.date?.message}
+            {...register('date', {
+              onChange: () => { dateManuallyChanged.current = true },
+            })}
+          />
 
           <Input
             label="Notas"
