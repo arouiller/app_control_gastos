@@ -1,10 +1,14 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import { FiCreditCard } from 'react-icons/fi'
+import { FiCreditCard, FiEdit2, FiTrash2 } from 'react-icons/fi'
 import { installmentService } from '../services/installmentService'
 import { categoryService } from '../services/categoryService'
+import { expenseService } from '../services/expenseService'
 import Card, { CardTitle } from '../components/UI/Card'
 import Badge from '../components/UI/Badge'
+import Modal from '../components/UI/Modal'
+import Button from '../components/UI/Button'
 import { PageLoader } from '../components/UI/LoadingSpinner'
 import EmptyState from '../components/UI/EmptyState'
 import MonthlyChart from '../components/reports/MonthlyChart'
@@ -44,12 +48,35 @@ function buildChartData(rows, displayCurrency) {
 }
 
 export default function Installments() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const [grouped, setGrouped] = useState([])
   const [chartRows, setChartRows] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [categoryIds, setCategoryIds] = useState([])
   const [displayCurrency, setDisplayCurrency] = useState('USD')
+  const [deleteTarget, setDeleteTarget] = useState(null) // { id, totalInstallments }
+  const [deleting, setDeleting] = useState(false)
+
+  const handleEdit = (row) => {
+    navigate(`/expenses/${row.id}/edit`, { state: { from: location.pathname } })
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await expenseService.remove(deleteTarget.id)
+      toast.success('Gasto eliminado')
+      setDeleteTarget(null)
+      loadData(categoryIds)
+    } catch {
+      toast.error('Error al eliminar el gasto')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const toggleCategory = (id) => {
     setCategoryIds((prev) =>
@@ -233,6 +260,7 @@ export default function Installments() {
                     <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3 hidden md:table-cell">Pagado</th>
                     <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Pendiente</th>
                     <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Total</th>
+                    <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -270,6 +298,16 @@ export default function Installments() {
                       <td className="px-4 py-3 text-right font-mono font-semibold text-sm text-primary">
                         {formatCurrency(getAmount(row, 'total'))}
                       </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => handleEdit(row)} className="p-1.5 text-neutral-darker hover:text-secondary rounded transition-colors" title="Editar">
+                            <FiEdit2 size={14} />
+                          </button>
+                          <button onClick={() => setDeleteTarget({ id: row.id, totalInstallments: row.counts.total })} className="p-1.5 text-neutral-darker hover:text-danger rounded transition-colors" title="Eliminar todas las cuotas">
+                            <FiTrash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -278,6 +316,16 @@ export default function Installments() {
           </Card>
         </>
       )}
+
+      <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Eliminar Gasto en Cuotas">
+        <p className="text-sm text-primary mb-6">
+          Este gasto tiene {deleteTarget?.totalInstallments} cuotas. Se eliminarán el gasto completo y todas sus cuotas. Esta acción no se puede deshacer.
+        </p>
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+          <Button variant="danger" loading={deleting} onClick={handleDeleteConfirm}>Eliminar</Button>
+        </div>
+      </Modal>
     </div>
   )
 }

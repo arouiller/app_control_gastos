@@ -111,7 +111,7 @@ const updateExpense = async (req, res, next) => {
       return error(res, 'No se puede editar una cuota individualmente. Edita el gasto padre.', 403);
     }
 
-    const { description, amount, date, categoryId, paymentMethod, notes, currency, numberOfInstallments } = req.body;
+    const { description, amount, date, categoryId, paymentMethod, notes, currency, numberOfInstallments, isInstallment } = req.body;
     const updates = {};
     if (description !== undefined) updates.description = description;
     if (amount !== undefined) updates.amount = parseFloat(amount);
@@ -124,6 +124,56 @@ const updateExpense = async (req, res, next) => {
     }
     if (paymentMethod !== undefined) updates.payment_method = paymentMethod;
     if (notes !== undefined) updates.notes = notes;
+
+    // Case: converting installment → regular expense
+    if (expense.is_installment && expense.installment_group_id === null && isInstallment === false) {
+      await sequelize.transaction(async (t) => {
+        await Expense.destroy({ where: { installment_group_id: expense.id }, transaction: t });
+        updates.is_installment = false;
+        updates.total_installments = null;
+        updates.installment_number = null;
+        await expense.update(updates, { transaction: t });
+      });
+      await expense.reload();
+      return success(res, expense, 'Gasto actualizado');
+    }
+
+    // Case: converting regular expense → installment
+    if (!expense.is_installment && isInstallment === true) {
+      const numInstallments = parseInt(numberOfInstallments);
+      if (!numInstallments || numInstallments < 2 || numInstallments > 36) {
+        return error(res, 'El número de cuotas debe ser entre 2 y 36', 400);
+      }
+      const totalAmount = updates.amount !== undefined ? updates.amount : parseFloat(expense.amount);
+      const installmentAmount = parseFloat((totalAmount / numInstallments).toFixed(2));
+      const baseDate = updates.date || expense.date;
+
+      await sequelize.transaction(async (t) => {
+        updates.is_installment = true;
+        updates.total_installments = numInstallments;
+        await expense.update(updates, { transaction: t });
+        const childrenData = [];
+        for (let i = 1; i <= numInstallments; i++) {
+          childrenData.push({
+            user_id: req.user.id,
+            category_id: updates.category_id || expense.category_id,
+            description: updates.description || expense.description,
+            amount: installmentAmount,
+            currency: updates.currency || expense.currency,
+            date: format(addMonths(new Date(baseDate), i - 1)),
+            payment_method: updates.payment_method || expense.payment_method,
+            is_installment: true,
+            total_installments: numInstallments,
+            installment_number: i,
+            installment_group_id: expense.id,
+            notes: updates.notes !== undefined ? updates.notes : expense.notes,
+          });
+        }
+        await Expense.bulkCreate(childrenData, { transaction: t });
+      });
+      await expense.reload();
+      return success(res, expense, 'Gasto actualizado');
+    }
 
     // RF-509: if it's a parent installment, update all children too
     if (expense.is_installment && expense.installment_group_id === null) {

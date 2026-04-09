@@ -66,7 +66,7 @@ export default function Dashboard() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailSort, setDetailSort] = useState({ field: 'date', dir: 'desc' })
 
-  const [deleteId, setDeleteId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null) // { id, isInstallment, totalInstallments }
   const [deleting, setDeleting] = useState(false)
 
   const getDataByCurrency = (data, currency) => {
@@ -194,12 +194,12 @@ export default function Dashboard() {
   }
 
   const handleDelete = async () => {
-    if (!deleteId) return
+    if (!deleteTarget) return
     setDeleting(true)
     try {
-      await expenseService.remove(deleteId)
+      await expenseService.remove(deleteTarget.id)
       toast.success('Gasto eliminado')
-      setDeleteId(null)
+      setDeleteTarget(null)
       // Refetch expenses and analytics
       if (activePeriod) {
         setSelected(null)
@@ -385,7 +385,7 @@ export default function Dashboard() {
                 onSort={handleSortDetail}
                 displayCurrency={displayCurrency}
                 onEdit={handleEdit}
-                onDelete={setDeleteId}
+                onDelete={(e) => setDeleteTarget({ id: e.installment_group_id || e.id, isInstallment: !!(e.is_installment || e.installment_group_id), totalInstallments: e.total_installments })}
               />
             )}
           </Card>
@@ -424,10 +424,14 @@ export default function Dashboard() {
       )}
 
       {/* Delete confirmation modal */}
-      <Modal isOpen={!!deleteId} onClose={() => setDeleteId(null)} title="Eliminar Gasto">
-        <p className="text-sm text-primary mb-6">¿Estás seguro de que quieres eliminar este gasto? Esta acción no se puede deshacer.</p>
+      <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Eliminar Gasto">
+        <p className="text-sm text-primary mb-6">
+          {deleteTarget?.isInstallment
+            ? `Este gasto tiene ${deleteTarget.totalInstallments} cuotas. Se eliminarán el gasto completo y todas sus cuotas. Esta acción no se puede deshacer.`
+            : '¿Estás seguro de que quieres eliminar este gasto? Esta acción no se puede deshacer.'}
+        </p>
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => setDeleteId(null)}>Cancelar</Button>
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
           <Button variant="danger" loading={deleting} onClick={handleDelete}>Eliminar</Button>
         </div>
       </Modal>

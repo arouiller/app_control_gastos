@@ -51,6 +51,7 @@ router.put('/:id',
     body('paymentMethod').optional().isIn(['cash', 'credit_card']),
     body('currency').optional().isIn(['ARS', 'USD']),
     body('numberOfInstallments').optional().isInt({ min: 2, max: 36 }),
+    body('isInstallment').optional().isBoolean(),
   ],
   validate,
   ctrl.updateExpense
