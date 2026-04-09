@@ -12,6 +12,10 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Single in-flight refresh promise — prevents race condition when multiple
+// concurrent requests fail with 401 at the same time.
+let refreshPromise = null
+
 // Auto-refresh token on 401
 api.interceptors.response.use(
   (response) => response,
@@ -28,10 +32,12 @@ api.interceptors.response.use(
       }
 
       try {
-        const { data } = await axios.post(
-          `${import.meta.env.VITE_API_URL || '/api'}/auth/refresh-token`,
-          { refreshToken }
-        )
+        if (!refreshPromise) {
+          refreshPromise = axios
+            .post(`${import.meta.env.VITE_API_URL || '/api'}/auth/refresh-token`, { refreshToken })
+            .finally(() => { refreshPromise = null })
+        }
+        const { data } = await refreshPromise
         localStorage.setItem('accessToken', data.accessToken)
         localStorage.setItem('refreshToken', data.refreshToken)
         original.headers.Authorization = `Bearer ${data.accessToken}`

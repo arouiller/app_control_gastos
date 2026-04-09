@@ -93,6 +93,7 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
         page: 1,
         limit: 50,
       })
+      // Backend now returns snake_case fields; attach category to each expense
       setDetailData({
         ...response.data,
         expenses: (response.data.expenses || []).map((e) => ({ ...e, category })),
@@ -116,21 +117,10 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
       const { startDate, endDate } = monthDateRange(month)
       const response = await expenseService.getAll({ startDate, endDate, limit: 200 })
       const items = response.data || []
+      // Keep API snake_case format so DetailTable can consume directly
       setDetailData({
-        expenses: items.map((e) => ({
-          id: e.id,
-          description: e.description,
-          amount: parseFloat(e.original_amount || e.amount || 0),
-          amountInArs: parseFloat(e.amount_in_ars || e.original_amount || e.amount || 0),
-          amountInUsd: parseFloat(e.amount_in_usd || 0),
-          date: e.date,
-          paymentMethod: e.payment_method,
-          isInstallment: !!e.is_installment,
-          installmentNumber: e.installment_number || null,
-          totalInstallments: e.total_installments || null,
-          category: e.category || null,
-        })),
-        total: items.reduce((s, e) => s + parseFloat(e.amount_in_ars || e.original_amount || e.amount || 0), 0),
+        expenses: items,
+        total: items.reduce((s, e) => s + parseFloat(e.amount_in_ars || e.original_amount || 0), 0),
         pagination: { total: items.length },
       })
     } catch {

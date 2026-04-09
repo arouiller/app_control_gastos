@@ -1,138 +1,30 @@
-import { useEffect, useState } from 'react'
-import { FiChevronUp, FiChevronDown, FiX } from 'react-icons/fi'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { format } from 'date-fns'
+import { FiX } from 'react-icons/fi'
 import { useMonthlyReport } from '../../hooks/useMonthlyReport'
 import { categoryService } from '../../services/categoryService'
+import { expenseService } from '../../services/expenseService'
 import FilterPanel from '../../components/reports/FilterPanel'
 import MonthlyChart from '../../components/reports/MonthlyChart'
+import DetailTable from '../../components/reports/DetailTable'
 import Card, { CardTitle } from '../../components/UI/Card'
-import Badge from '../../components/UI/Badge'
+import Modal from '../../components/UI/Modal'
+import Button from '../../components/UI/Button'
 import { PageLoader } from '../../components/UI/LoadingSpinner'
-import { formatCurrency, formatDate } from '../../utils/formatters'
+import { formatCurrency } from '../../utils/formatters'
 import { toast } from 'react-toastify'
-import { PAYMENT_METHOD_LABELS } from '../../utils/constants'
-
-// ─── Sortable th ─────────────────────────────────────────────────────────────
-function SortTh({ label, field, sort, onSort }) {
-  const active = sort.field === field
-  return (
-    <th onClick={() => onSort(field)} className="text-left text-xs font-semibold text-neutral-darker px-3 py-2 cursor-pointer select-none hover:text-primary whitespace-nowrap">
-      <span className="flex items-center gap-1">
-        {label}
-        {active
-          ? (sort.dir === 'asc' ? <FiChevronUp size={12} /> : <FiChevronDown size={12} />)
-          : <FiChevronDown size={12} className="opacity-30" />}
-      </span>
-    </th>
-  )
-}
-
-// ─── Inline detail table ──────────────────────────────────────────────────────
-function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabel, displayCurrency, onClose }) {
-  const [sort, setSort] = useState({ field: 'date', dir: 'desc' })
-
-  const handleSort = (field) =>
-    setSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
-
-  const th = (label, field) => <SortTh label={label} field={field} sort={sort} onSort={handleSort} />
-
-  const getAmount = (e) => {
-    if (displayCurrency === 'USD') return e.amountInUsd || 0
-    return e.amountInArs || e.amount || 0
-  }
-
-  const expenses = detailData?.expenses || []
-  const sorted = [...expenses].sort((a, b) => {
-    let av, bv
-    if (sort.field === 'date')   { av = a.date;                            bv = b.date }
-    if (sort.field === 'amount') { av = getAmount(a);                      bv = getAmount(b) }
-    if (sort.field === 'desc')   { av = a.description?.toLowerCase();      bv = b.description?.toLowerCase() }
-    if (sort.field === 'cat')    { av = a.category?.name?.toLowerCase();   bv = b.category?.name?.toLowerCase() }
-    if (sort.field === 'method') { av = a.paymentMethod;                   bv = b.paymentMethod }
-    if (av < bv) return sort.dir === 'asc' ? -1 : 1
-    if (av > bv) return sort.dir === 'asc' ?  1 : -1
-    return 0
-  })
-
-  const title = selectedCategory
-    ? `${selectedCategory.name} — ${selectedMonthLabel}`
-    : `Todos los gastos — ${selectedMonthLabel}`
-
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <CardTitle>{title}</CardTitle>
-          {detailData && (
-            <p className="text-xs text-neutral-darker mt-1">
-              {detailData.pagination?.total ?? expenses.length} gastos · Total: {formatCurrency(detailData.total || 0)}
-            </p>
-          )}
-        </div>
-        <button onClick={onClose} className="p-1.5 text-neutral-darker hover:text-primary rounded transition-colors">
-          <FiX size={16} />
-        </button>
-      </div>
-
-      {loading && <p className="text-sm text-neutral-darker text-center py-8">Cargando...</p>}
-
-      {!loading && expenses.length === 0 && (
-        <p className="text-sm text-neutral-darker text-center py-8">Sin gastos para esta selección</p>
-      )}
-
-      {!loading && expenses.length > 0 && (
-        <div className="overflow-x-auto rounded border border-neutral">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-neutral">
-              <tr>
-                {th('Descripción', 'desc')}
-                {th('Categoría', 'cat')}
-                {th('Fecha', 'date')}
-                {th('Método', 'method')}
-                {th('Monto', 'amount')}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((e) => (
-                <tr key={e.id} className="border-b border-neutral last:border-0 hover:bg-gray-50">
-                  <td className="px-3 py-2">
-                    <span className="font-medium text-primary">{e.description}</span>
-                    {e.isInstallment && e.installmentNumber && (
-                      <Badge variant="info" className="ml-1 text-xs">
-                        {e.installmentNumber}/{e.totalInstallments}
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {e.category ? (
-                      <span className="flex items-center gap-1 text-neutral-darker whitespace-nowrap">
-                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.category.color || '#ccc' }} />
-                        {e.category.name}
-                      </span>
-                    ) : <span className="text-neutral-darker">—</span>}
-                  </td>
-                  <td className="px-3 py-2 text-neutral-darker whitespace-nowrap">{formatDate(e.date)}</td>
-                  <td className="px-3 py-2">
-                    <Badge variant={e.paymentMethod === 'cash' ? 'success' : 'info'} className="text-xs">
-                      {PAYMENT_METHOD_LABELS[e.paymentMethod]}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono font-semibold text-primary whitespace-nowrap">
-                    {formatCurrency(getAmount(e))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  )
-}
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function ReportMonthlyGrouping() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const [categories, setCategories] = useState([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [sort, setSort] = useState({ field: 'date', dir: 'desc' })
+  const [deleteId, setDeleteId] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const autoOpenedRef = useRef(false)
 
   const {
     filters,
@@ -151,6 +43,7 @@ export default function ReportMonthlyGrouping() {
     openDetailModal,
     openMonthDetail,
     closeDetailModal,
+    refetchData,
   } = useMonthlyReport()
 
   useEffect(() => {
@@ -163,9 +56,55 @@ export default function ReportMonthlyGrouping() {
       .finally(() => setCategoriesLoading(false))
   }, [])
 
+  // Auto-open current month detail on first data load
+  useEffect(() => {
+    if (data && !autoOpenedRef.current) {
+      autoOpenedRef.current = true
+      const currentMonth = format(new Date(), 'yyyy-MM')
+      const targetMonth = data.months?.includes(currentMonth)
+        ? currentMonth
+        : data.months?.[data.months.length - 1]
+      if (targetMonth) openMonthDetail(targetMonth)
+    }
+  }, [data, openMonthDetail])
+
+  const handleEdit = (expense) => {
+    const targetId = expense.installment_group_id || expense.id
+    navigate(`/expenses/${targetId}/edit`, { state: { from: location.pathname } })
+  }
+
+  const handleDeleteClick = (id) => setDeleteId(id)
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteId) return
+    setDeleting(true)
+    try {
+      await expenseService.remove(deleteId)
+      toast.success('Gasto eliminado')
+      setDeleteId(null)
+      refetchData()
+      // Reload detail if open
+      if (modalOpen && selectedMonth) {
+        if (selectedCategory) {
+          openDetailModal(selectedMonth, selectedCategory)
+        } else {
+          openMonthDetail(selectedMonth)
+        }
+      }
+    } catch {
+      toast.error('Error al eliminar el gasto')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const selectedMonthLabel = selectedMonth && data
     ? data.monthLabels[data.months.indexOf(selectedMonth)]
     : selectedMonth || null
+
+  const detailTitle = selectedCategory
+    ? `${selectedCategory.name} — ${selectedMonthLabel}`
+    : `Todos los gastos — ${selectedMonthLabel}`
 
   if (categoriesLoading) return <PageLoader />
 
@@ -240,19 +179,52 @@ export default function ReportMonthlyGrouping() {
             onMonthClick={(month) => openMonthDetail(month)}
           />
 
-          {/* Inline detail table — shown when a bar or month is clicked */}
+          {/* Inline detail table */}
           {modalOpen && (
-            <InlineDetail
-              detailData={detailData}
-              loading={detailLoading}
-              selectedCategory={selectedCategory}
-              selectedMonthLabel={selectedMonthLabel}
-              displayCurrency={displayCurrency}
-              onClose={closeDetailModal}
-            />
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <CardTitle>{detailTitle}</CardTitle>
+                  {detailData && (
+                    <p className="text-xs text-neutral-darker mt-1">
+                      {detailData.pagination?.total ?? detailData.expenses?.length ?? 0} gastos · Total: {formatCurrency(detailData.total || 0)}
+                    </p>
+                  )}
+                </div>
+                <button onClick={closeDetailModal} className="p-1.5 text-neutral-darker hover:text-primary rounded transition-colors">
+                  <FiX size={16} />
+                </button>
+              </div>
+
+              {detailLoading && <p className="text-sm text-neutral-darker text-center py-8">Cargando...</p>}
+
+              {!detailLoading && (!detailData?.expenses || detailData.expenses.length === 0) && (
+                <p className="text-sm text-neutral-darker text-center py-8">Sin gastos para esta selección</p>
+              )}
+
+              {!detailLoading && detailData?.expenses?.length > 0 && (
+                <DetailTable
+                  expenses={detailData.expenses}
+                  sort={sort}
+                  onSort={(field) => setSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))}
+                  displayCurrency={displayCurrency}
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteClick}
+                />
+              )}
+            </Card>
           )}
         </>
       )}
+
+      {/* Delete confirmation modal */}
+      <Modal isOpen={!!deleteId} onClose={() => setDeleteId(null)} title="Eliminar Gasto">
+        <p className="text-sm text-primary mb-6">¿Estás seguro de que quieres eliminar este gasto? Esta acción no se puede deshacer.</p>
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={() => setDeleteId(null)}>Cancelar</Button>
+          <Button variant="danger" loading={deleting} onClick={handleDeleteConfirm}>Eliminar</Button>
+        </div>
+      </Modal>
     </div>
   )
 }

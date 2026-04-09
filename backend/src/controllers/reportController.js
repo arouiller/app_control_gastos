@@ -191,6 +191,7 @@ const monthlyGroupingDetails = async (req, res, next) => {
           ewc.is_installment AS isInstallment,
           ewc.installment_number AS installmentNumber,
           ewc.total_installments AS totalInstallments,
+          ewc.installment_group_id AS installmentGroupId,
           ewc.notes, ewc.created_at AS createdAt
        FROM expenses_with_conversions ewc
        WHERE ewc.user_id = ? AND ewc.category_id = ?
@@ -210,16 +211,16 @@ const monthlyGroupingDetails = async (req, res, next) => {
       expenses: rows.map((e) => ({
         id: e.id,
         description: e.description,
-        amount: parseFloat(e.amount || 0),
-        amountInArs: parseFloat(e.amountInArs || 0),
-        amountInUsd: parseFloat(e.amountInUsd || 0),
+        original_amount: parseFloat(e.amount || 0),
+        amount_in_ars: parseFloat(e.amountInArs || 0),
+        amount_in_usd: parseFloat(e.amountInUsd || 0),
         date: e.date,
-        paymentMethod: e.paymentMethod,
-        isInstallment: !!e.isInstallment,
-        installmentNumber: e.installmentNumber || null,
-        totalInstallments: e.totalInstallments || null,
+        payment_method: e.paymentMethod,
+        is_installment: !!e.isInstallment,
+        installment_number: e.installmentNumber || null,
+        total_installments: e.totalInstallments || null,
+        installment_group_id: e.installmentGroupId || null,
         notes: e.notes,
-        createdAt: e.createdAt,
       })),
       pagination: { page: pageNum, limit: limitNum, total: count },
     });
