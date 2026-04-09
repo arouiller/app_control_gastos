@@ -92,7 +92,10 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
         page: 1,
         limit: 50,
       })
-      setDetailData(response.data)
+      setDetailData({
+        ...response.data,
+        expenses: (response.data.expenses || []).map((e) => ({ ...e, category })),
+      })
     } catch (err) {
       const msg = err.response?.data?.error?.message || 'Error al cargar detalles'
       toast.error(msg)
@@ -117,13 +120,16 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
           id: e.id,
           description: e.description,
           amount: parseFloat(e.original_amount || e.amount || 0),
+          amountInArs: parseFloat(e.amount_in_ars || e.original_amount || e.amount || 0),
+          amountInUsd: parseFloat(e.amount_in_usd || 0),
           date: e.date,
           paymentMethod: e.payment_method,
           isInstallment: !!e.is_installment,
           installmentNumber: e.installment_number || null,
           totalInstallments: e.total_installments || null,
+          category: e.category || null,
         })),
-        total: items.reduce((s, e) => s + parseFloat(e.original_amount || e.amount || 0), 0),
+        total: items.reduce((s, e) => s + parseFloat(e.amount_in_ars || e.original_amount || e.amount || 0), 0),
         pagination: { total: items.length },
       })
     } catch {

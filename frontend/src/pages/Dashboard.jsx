@@ -96,7 +96,7 @@ function SortTh({ label, field, sort, onSort }) {
 }
 
 // ─── Shared detail table ──────────────────────────────────────────────────────
-function DetailTable({ expenses, sort, onSort, displayCurrency, showCategory, onEdit, onDelete }) {
+function DetailTable({ expenses, sort, onSort, displayCurrency, onEdit, onDelete }) {
   const sorted = [...expenses].sort((a, b) => {
     let av, bv
     if (sort.field === 'date')        { av = a.date;                          bv = b.date }
@@ -117,7 +117,8 @@ function DetailTable({ expenses, sort, onSort, displayCurrency, showCategory, on
         <thead className="bg-gray-50 border-b border-neutral">
           <tr>
             {th('Descripción', 'desc')}
-            {showCategory ? th('Categoría', 'cat') : th('Método', 'method')}
+            {th('Categoría', 'cat')}
+            {th('Método', 'method')}
             {th('Fecha', 'date')}
             {th('Monto', 'amount')}
             {(onEdit || onDelete) && <th className="px-3 py-2 text-right text-xs font-semibold text-neutral-darker">Acciones</th>}
@@ -136,16 +137,15 @@ function DetailTable({ expenses, sort, onSort, displayCurrency, showCategory, on
                 )}
               </td>
               <td className="px-3 py-2">
-                {showCategory ? (
-                  <span className="flex items-center gap-1 text-neutral-darker">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.category?.color || '#ccc' }} />
-                    {e.category?.name}
-                  </span>
-                ) : (
-                  <Badge variant={e.payment_method === 'cash' ? 'success' : 'info'} className="text-xs">
-                    {PAYMENT_METHOD_LABELS[e.payment_method]}
-                  </Badge>
-                )}
+                <span className="flex items-center gap-1 text-neutral-darker">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.category?.color || '#ccc' }} />
+                  {e.category?.name || '—'}
+                </span>
+              </td>
+              <td className="px-3 py-2">
+                <Badge variant={e.payment_method === 'cash' ? 'success' : 'info'} className="text-xs">
+                  {PAYMENT_METHOD_LABELS[e.payment_method]}
+                </Badge>
               </td>
               <td className="px-3 py-2 text-neutral-darker whitespace-nowrap">{formatDate(e.date)}</td>
               <td className="px-3 py-2 text-right font-mono font-semibold text-primary whitespace-nowrap">
@@ -548,7 +548,6 @@ export default function Dashboard() {
                 sort={detailSort}
                 onSort={handleSortDetail}
                 displayCurrency={displayCurrency}
-                showCategory={selected?.type === 'cvc'}
                 onEdit={handleEdit}
                 onDelete={setDeleteId}
               />

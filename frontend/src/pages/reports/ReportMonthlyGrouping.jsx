@@ -27,7 +27,7 @@ function SortTh({ label, field, sort, onSort }) {
 }
 
 // ─── Inline detail table ──────────────────────────────────────────────────────
-function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabel, onClose }) {
+function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabel, displayCurrency, onClose }) {
   const [sort, setSort] = useState({ field: 'date', dir: 'desc' })
 
   const handleSort = (field) =>
@@ -35,13 +35,19 @@ function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabe
 
   const th = (label, field) => <SortTh label={label} field={field} sort={sort} onSort={handleSort} />
 
+  const getAmount = (e) => {
+    if (displayCurrency === 'USD') return e.amountInUsd || 0
+    return e.amountInArs || e.amount || 0
+  }
+
   const expenses = detailData?.expenses || []
   const sorted = [...expenses].sort((a, b) => {
     let av, bv
-    if (sort.field === 'date')   { av = a.date;          bv = b.date }
-    if (sort.field === 'amount') { av = a.amount || 0;   bv = b.amount || 0 }
-    if (sort.field === 'desc')   { av = a.description?.toLowerCase(); bv = b.description?.toLowerCase() }
-    if (sort.field === 'method') { av = a.paymentMethod; bv = b.paymentMethod }
+    if (sort.field === 'date')   { av = a.date;                            bv = b.date }
+    if (sort.field === 'amount') { av = getAmount(a);                      bv = getAmount(b) }
+    if (sort.field === 'desc')   { av = a.description?.toLowerCase();      bv = b.description?.toLowerCase() }
+    if (sort.field === 'cat')    { av = a.category?.name?.toLowerCase();   bv = b.category?.name?.toLowerCase() }
+    if (sort.field === 'method') { av = a.paymentMethod;                   bv = b.paymentMethod }
     if (av < bv) return sort.dir === 'asc' ? -1 : 1
     if (av > bv) return sort.dir === 'asc' ?  1 : -1
     return 0
@@ -79,6 +85,7 @@ function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabe
             <thead className="bg-gray-50 border-b border-neutral">
               <tr>
                 {th('Descripción', 'desc')}
+                {th('Categoría', 'cat')}
                 {th('Fecha', 'date')}
                 {th('Método', 'method')}
                 {th('Monto', 'amount')}
@@ -95,6 +102,14 @@ function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabe
                       </Badge>
                     )}
                   </td>
+                  <td className="px-3 py-2">
+                    {e.category ? (
+                      <span className="flex items-center gap-1 text-neutral-darker whitespace-nowrap">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.category.color || '#ccc' }} />
+                        {e.category.name}
+                      </span>
+                    ) : <span className="text-neutral-darker">—</span>}
+                  </td>
                   <td className="px-3 py-2 text-neutral-darker whitespace-nowrap">{formatDate(e.date)}</td>
                   <td className="px-3 py-2">
                     <Badge variant={e.paymentMethod === 'cash' ? 'success' : 'info'} className="text-xs">
@@ -102,7 +117,7 @@ function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabe
                     </Badge>
                   </td>
                   <td className="px-3 py-2 text-right font-mono font-semibold text-primary whitespace-nowrap">
-                    {formatCurrency(e.amount)}
+                    {formatCurrency(getAmount(e))}
                   </td>
                 </tr>
               ))}
@@ -118,6 +133,7 @@ function InlineDetail({ detailData, loading, selectedCategory, selectedMonthLabe
 export default function ReportMonthlyGrouping() {
   const [categories, setCategories] = useState([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [displayCurrency, setDisplayCurrency] = useState('ARS')
 
   const {
     filters,
@@ -156,6 +172,19 @@ export default function ReportMonthlyGrouping() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-primary">Reporte Mensual por Categoría</h1>
+        <div className="flex gap-0.5 bg-neutral rounded-lg p-1">
+          {[['ARS', '$'], ['USD', 'U$D']].map(([val, lbl]) => (
+            <button
+              key={val}
+              onClick={() => setDisplayCurrency(val)}
+              className={`px-3 py-1.5 rounded text-xs font-bold transition-colors ${
+                displayCurrency === val ? 'bg-secondary text-white shadow-sm' : 'text-neutral-darker hover:text-primary'
+              }`}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
       </div>
 
       <FilterPanel
@@ -218,6 +247,7 @@ export default function ReportMonthlyGrouping() {
               loading={detailLoading}
               selectedCategory={selectedCategory}
               selectedMonthLabel={selectedMonthLabel}
+              displayCurrency={displayCurrency}
               onClose={closeDetailModal}
             />
           )}
