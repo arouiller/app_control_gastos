@@ -219,7 +219,7 @@ export default function Dashboard() {
   const [activePeriod, setActivePeriod] = useState(null)
   const [allData, setAllData] = useState({ summary: null, byCategory: null, pendingInstallments: null, cashVsCard: null })
   const [loading, setLoading] = useState(true)
-  const [displayCurrency, setDisplayCurrency] = useState('ARS')
+  const [displayCurrency, setDisplayCurrency] = useState('USD')
 
   const [selected, setSelected] = useState(null)
   const [allExpenses, setAllExpenses] = useState([])

@@ -49,7 +49,7 @@ export default function Installments() {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [categoryIds, setCategoryIds] = useState([])
-  const [displayCurrency, setDisplayCurrency] = useState('ARS')
+  const [displayCurrency, setDisplayCurrency] = useState('USD')
 
   const toggleCategory = (id) => {
     setCategoryIds((prev) =>
@@ -139,6 +139,16 @@ export default function Installments() {
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-2 items-center">
           <button
+            onClick={() => setCategoryIds(categories.map((c) => c.id))}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+              categoryIds.length === categories.length
+                ? 'bg-primary text-white border-transparent'
+                : 'bg-white text-neutral-darker border-neutral hover:border-primary hover:text-primary'
+            }`}
+          >
+            Todas
+          </button>
+          <button
             onClick={() => setCategoryIds([])}
             className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
               categoryIds.length === 0
@@ -146,7 +156,7 @@ export default function Installments() {
                 : 'bg-white text-neutral-darker border-neutral hover:border-primary hover:text-primary'
             }`}
           >
-            Todas
+            Ninguna
           </button>
           {categories.map((cat) => {
             const active = categoryIds.includes(cat.id)

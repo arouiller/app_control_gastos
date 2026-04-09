@@ -48,21 +48,22 @@ const monthlyGrouping = async (req, res, next) => {
     // parents have is_installment=1 AND installment_group_id IS NULL
     const query = `
       SELECT
-        DATE_FORMAT(e.date, '%Y-%m') AS month_key,
+        DATE_FORMAT(ewc.expense_date, '%Y-%m') AS month_key,
         c.id AS category_id,
         c.name AS category_name,
         c.color AS category_color,
-        SUM(e.amount) AS monthly_total
-      FROM expenses e
-      INNER JOIN categories c ON e.category_id = c.id
+        SUM(ewc.amount_in_ars) AS monthly_ars,
+        SUM(ewc.amount_in_usd) AS monthly_usd
+      FROM expenses_with_conversions ewc
+      INNER JOIN categories c ON ewc.category_id = c.id
       WHERE
-        e.user_id = :userId
-        AND DATE(e.date) BETWEEN :dateFrom AND :dateTo
+        ewc.user_id = :userId
+        AND DATE(ewc.expense_date) BETWEEN :dateFrom AND :dateTo
         AND c.user_id = :userId
-        AND (e.is_installment = FALSE OR e.installment_group_id IS NOT NULL)
+        AND (ewc.is_installment = FALSE OR ewc.installment_group_id IS NOT NULL)
         ${categoryFilter}
       GROUP BY
-        DATE_FORMAT(e.date, '%Y-%m'),
+        DATE_FORMAT(ewc.expense_date, '%Y-%m'),
         c.id, c.name, c.color
       ORDER BY
         month_key ASC,
@@ -90,14 +91,10 @@ const monthlyGrouping = async (req, res, next) => {
     for (const row of rows) {
       const catId = row.category_id;
       if (!categoryMap[catId]) {
-        categoryMap[catId] = {
-          id: catId,
-          name: row.category_name,
-          color: row.category_color,
-          data: {},
-        };
+        categoryMap[catId] = { id: catId, name: row.category_name, color: row.category_color, dataArs: {}, dataUsd: {} };
       }
-      categoryMap[catId].data[row.month_key] = parseFloat(row.monthly_total);
+      categoryMap[catId].dataArs[row.month_key] = parseFloat(row.monthly_ars || 0);
+      categoryMap[catId].dataUsd[row.month_key] = parseFloat(row.monthly_usd || 0);
     }
 
     // Align data to month array
@@ -105,18 +102,26 @@ const monthlyGrouping = async (req, res, next) => {
       id: cat.id,
       name: cat.name,
       color: cat.color,
-      data: months.map((m) => cat.data[m] || 0),
+      dataArs: months.map((m) => cat.dataArs[m] || 0),
+      dataUsd: months.map((m) => cat.dataUsd[m] || 0),
     }));
 
-    // Compute totals
-    const monthlyTotals = {};
-    const categoryTotals = {};
-    months.forEach((m) => { monthlyTotals[m] = 0; });
+    // Compute per-currency totals
+    const monthlyTotalsArs = {};
+    const monthlyTotalsUsd = {};
+    const categoryTotalsArs = {};
+    const categoryTotalsUsd = {};
+    months.forEach((m) => { monthlyTotalsArs[m] = 0; monthlyTotalsUsd[m] = 0; });
     for (const cat of categoriesArray) {
-      categoryTotals[String(cat.id)] = 0;
-      cat.data.forEach((amount, i) => {
-        monthlyTotals[months[i]] = parseFloat((monthlyTotals[months[i]] + amount).toFixed(2));
-        categoryTotals[String(cat.id)] = parseFloat((categoryTotals[String(cat.id)] + amount).toFixed(2));
+      categoryTotalsArs[String(cat.id)] = 0;
+      categoryTotalsUsd[String(cat.id)] = 0;
+      cat.dataArs.forEach((amt, i) => {
+        monthlyTotalsArs[months[i]] = parseFloat((monthlyTotalsArs[months[i]] + amt).toFixed(2));
+        categoryTotalsArs[String(cat.id)] = parseFloat((categoryTotalsArs[String(cat.id)] + amt).toFixed(2));
+      });
+      cat.dataUsd.forEach((amt, i) => {
+        monthlyTotalsUsd[months[i]] = parseFloat((monthlyTotalsUsd[months[i]] + amt).toFixed(2));
+        categoryTotalsUsd[String(cat.id)] = parseFloat((categoryTotalsUsd[String(cat.id)] + amt).toFixed(2));
       });
     }
 
@@ -124,8 +129,10 @@ const monthlyGrouping = async (req, res, next) => {
       months,
       monthLabels: months.map(formatMonthLabel),
       categories: categoriesArray,
-      monthlyTotals,
-      categoryTotals,
+      monthlyTotalsArs,
+      monthlyTotalsUsd,
+      categoryTotalsArs,
+      categoryTotalsUsd,
     });
   } catch (err) {
     next(err);

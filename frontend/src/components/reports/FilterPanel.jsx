@@ -1,5 +1,4 @@
 import Input from '../UI/Input'
-import Button from '../UI/Button'
 import Card from '../UI/Card'
 
 export default function FilterPanel({ filters, categories, onFilterChange }) {
@@ -60,28 +59,32 @@ export default function FilterPanel({ filters, categories, onFilterChange }) {
         {/* Category filter */}
         {categories.length > 0 && (
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-primary">Categorías</span>
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={selectAll}
-                  disabled={allSelected}
-                >
-                  Todas
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={deselectAll}
-                  disabled={noneSelected}
-                >
-                  Ninguna
-                </Button>
-              </div>
-            </div>
+            <span className="text-sm font-medium text-primary block mb-2">Categorías</span>
             <div className="flex flex-wrap gap-2">
+              {/* Quick-select pills */}
+              <button
+                onClick={selectAll}
+                disabled={allSelected}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                  allSelected
+                    ? 'bg-primary text-white border-transparent'
+                    : 'bg-white text-neutral-darker border-neutral hover:border-primary hover:text-primary'
+                }`}
+              >
+                Todas
+              </button>
+              <button
+                onClick={deselectAll}
+                disabled={noneSelected}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                  noneSelected
+                    ? 'bg-primary text-white border-transparent'
+                    : 'bg-white text-neutral-darker border-neutral hover:border-primary hover:text-primary'
+                }`}
+              >
+                Ninguna
+              </button>
+              {/* Category pills */}
               {categories.map((cat) => {
                 const active = (categoryIds || []).includes(cat.id)
                 return (
