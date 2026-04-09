@@ -51,6 +51,13 @@ const buildExpenseWhereClause = (query, userId) => {
   if (query.startDate) { whereClause += ' AND ewc.expense_date >= ?'; params.push(query.startDate); }
   if (query.endDate)   { whereClause += ' AND ewc.expense_date <= ?'; params.push(query.endDate); }
   if (query.categoryId) { whereClause += ' AND ewc.category_id = ?'; params.push(query.categoryId); }
+  if (query.categoryIds) {
+    const ids = String(query.categoryIds).split(',').map(Number).filter(Boolean)
+    if (ids.length > 0) {
+      whereClause += ` AND ewc.category_id IN (${ids.map(() => '?').join(',')})`
+      params.push(...ids)
+    }
+  }
   if (query.paymentMethod) { whereClause += ' AND ewc.payment_method = ?'; params.push(query.paymentMethod); }
   if (query.currency && ['ARS', 'USD'].includes(query.currency)) {
     whereClause += ' AND ewc.original_currency = ?';
