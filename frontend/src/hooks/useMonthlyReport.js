@@ -115,7 +115,11 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
     setDetailData(null)
     try {
       const { startDate, endDate } = monthDateRange(month)
-      const response = await expenseService.getAll({ startDate, endDate, limit: 200 })
+      const params = { startDate, endDate, limit: 200 }
+      if (filters.categoryIds && filters.categoryIds.length > 0) {
+        params.categoryIds = filters.categoryIds.join(',')
+      }
+      const response = await expenseService.getAll(params)
       const items = response.data || []
       // Keep API snake_case format so DetailTable can consume directly
       setDetailData({
@@ -129,7 +133,18 @@ export function useMonthlyReport(initialFilters = DEFAULT_FILTERS) {
     } finally {
       setDetailLoading(false)
     }
-  }, [])
+  }, [filters.categoryIds])
+
+  // Refresh open detail table when category filter changes
+  useEffect(() => {
+    if (!modalOpen || !selectedMonth) return
+    if (selectedCategory) {
+      openDetailModal(selectedMonth, selectedCategory)
+    } else {
+      openMonthDetail(selectedMonth)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.categoryIds])
 
   const closeDetailModal = useCallback(() => {
     setModalOpen(false)
