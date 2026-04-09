@@ -6,12 +6,11 @@ import {
 } from 'react-icons/fi'
 
 const navItems = [
-  { to: '/dashboard',              label: 'Dashboard',  Icon: FiHome },
-  { to: '/expenses',               label: 'Gastos',      Icon: FiDollarSign },
-  { to: '/installments',           label: 'Cuotas',      Icon: FiCreditCard },
-  { to: '/reports/monthly-grouping', label: 'Reportes',  Icon: FiBarChart2 },
-  { to: '/categories',             label: 'Categorías',  Icon: FiTag },
-  { to: '/profile',                label: 'Perfil',      Icon: FiUser },
+  { to: '/dashboard',                label: 'Dashboard',  Icon: FiHome },
+  { to: '/installments',             label: 'Cuotas',     Icon: FiCreditCard },
+  { to: '/reports/monthly-grouping', label: 'Reportes',   Icon: FiBarChart2 },
+  { to: '/categories',               label: 'Categorías', Icon: FiTag },
+  { to: '/profile',                  label: 'Perfil',     Icon: FiUser },
 ]
 
 export default function Sidebar({ isOpen, onClose }) {

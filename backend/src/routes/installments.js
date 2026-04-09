@@ -4,6 +4,8 @@ const ctrl = require('../controllers/installmentController');
 
 router.use(authenticate);
 
+router.get('/grouped', ctrl.getGrouped);
+router.get('/chart', ctrl.getMonthlyChart);
 router.get('/', ctrl.listInstallments);
 router.put('/:id/pay', ctrl.payInstallment);
 router.put('/:id/unpay', ctrl.unpayInstallment);
