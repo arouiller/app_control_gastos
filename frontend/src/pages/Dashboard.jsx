@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { FiDollarSign, FiCreditCard, FiPlus, FiX, FiTrendingUp } from 'react-icons/fi'
 import {
@@ -50,11 +50,14 @@ const currentMonthPeriod = () => {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [months, setMonths] = useState([])
   const [activePeriod, setActivePeriod] = useState(null)
   const [allData, setAllData] = useState({ summary: null, byCategory: null, pendingInstallments: null, cashVsCard: null })
   const [loading, setLoading] = useState(true)
-  const [displayCurrency, setDisplayCurrency] = useState('USD')
+  const [displayCurrency, setDisplayCurrency] = useState(
+    () => sessionStorage.getItem('dashboard_currency') || 'USD'
+  )
 
   const [selected, setSelected] = useState(null)
   const [allExpenses, setAllExpenses] = useState([])
@@ -72,6 +75,16 @@ export default function Dashboard() {
     return data[key] || data
   }
 
+  // Persist displayCurrency to sessionStorage when it changes
+  useEffect(() => {
+    sessionStorage.setItem('dashboard_currency', displayCurrency)
+  }, [displayCurrency])
+
+  // Persist activePeriod key to sessionStorage when it changes
+  useEffect(() => {
+    if (activePeriod) sessionStorage.setItem('dashboard_period', activePeriod.key)
+  }, [activePeriod])
+
   // Load date range on mount → build month list
   useEffect(() => {
     const init = async () => {
@@ -81,8 +94,9 @@ export default function Dashboard() {
         if (range?.firstDate && range?.lastDate) {
           const built = buildMonths(range.firstDate, range.lastDate)
           setMonths(built)
+          const savedKey = sessionStorage.getItem('dashboard_period')
           const cur = currentMonthPeriod()
-          const found = built.find((m) => m.key === cur.key)
+          const found = built.find((m) => m.key === (savedKey || cur.key))
           setActivePeriod(found || built[built.length - 1])
         } else {
           setActivePeriod(currentMonthPeriod())
@@ -175,11 +189,8 @@ export default function Dashboard() {
     setDetailSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
 
   const handleEdit = (expense) => {
-    if (expense.installment_group_id) {
-      navigate(`/expenses/${expense.installment_group_id}/edit`)
-    } else {
-      navigate(`/expenses/${expense.id}/edit`)
-    }
+    const targetId = expense.installment_group_id || expense.id
+    navigate(`/expenses/${targetId}/edit`, { state: { from: location.pathname } })
   }
 
   const handleDelete = async () => {
