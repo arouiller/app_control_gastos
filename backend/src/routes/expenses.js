@@ -3,6 +3,7 @@ const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
 const ctrl = require('../controllers/expenseController');
+const { createInstallmentExpense } = require('../controllers/installmentExpenseController');
 
 router.use(authenticate);
 
@@ -38,7 +39,7 @@ router.post('/installment',
     body('paymentMethod').optional().isIn(['cash', 'credit_card']).withMessage('Método de pago inválido'),
   ],
   validate,
-  ctrl.createInstallmentExpense
+  createInstallmentExpense
 );
 
 router.put('/:id',
