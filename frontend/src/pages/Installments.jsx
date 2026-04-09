@@ -227,11 +227,12 @@ export default function Installments() {
                 <thead>
                   <tr className="bg-gray-50 border-b border-neutral">
                     <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3">Descripción</th>
-                    <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Desde</th>
+                    <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Categoría</th>
+                    <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Primera cuota</th>
                     <th className="text-center text-xs font-semibold text-neutral-darker px-4 py-3">Cuotas</th>
-                    <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Total</th>
                     <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3 hidden md:table-cell">Pagado</th>
                     <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Pendiente</th>
+                    <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -239,12 +240,14 @@ export default function Installments() {
                     <tr key={row.id} className="border-b border-neutral last:border-0 hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <p className="text-sm font-medium text-primary">{row.description}</p>
-                        {row.category && (
-                          <p className="text-xs text-neutral-darker flex items-center gap-1 mt-0.5">
-                            <span className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: row.category.color || '#ccc' }} />
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        {row.category ? (
+                          <span className="flex items-center gap-1 text-sm text-neutral-darker">
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.category.color || '#ccc' }} />
                             {row.category.name}
-                          </p>
-                        )}
+                          </span>
+                        ) : <span className="text-neutral-darker">—</span>}
                       </td>
                       <td className="px-4 py-3 hidden sm:table-cell text-sm text-neutral-darker">
                         {formatDate(row.startDate)}
@@ -258,14 +261,14 @@ export default function Installments() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold text-sm text-primary">
-                        {formatCurrency(getAmount(row, 'total'))}
-                      </td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-success hidden md:table-cell">
                         {formatCurrency(getAmount(row, 'paid'))}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-sm text-danger">
                         {formatCurrency(getAmount(row, 'pending'))}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold text-sm text-primary">
+                        {formatCurrency(getAmount(row, 'total'))}
                       </td>
                     </tr>
                   ))}

@@ -1,31 +1,39 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import { FiPlus, FiEdit2, FiTrash2, FiFilter, FiSearch, FiX } from 'react-icons/fi'
+import { FiPlus, FiFilter, FiSearch, FiX } from 'react-icons/fi'
 import { fetchExpenses, deleteExpense, setFilters, clearFilters, setDisplayCurrency } from '../store/expensesSlice'
 import { fetchCategories } from '../store/categoriesSlice'
 import Button from '../components/UI/Button'
 import Input from '../components/UI/Input'
 import Select from '../components/UI/Select'
 import Card from '../components/UI/Card'
-import Badge from '../components/UI/Badge'
+import DetailTable from '../components/reports/DetailTable'
 import { PageLoader } from '../components/UI/LoadingSpinner'
 import EmptyState from '../components/UI/EmptyState'
 import Modal from '../components/UI/Modal'
-import { formatCurrency, formatDate, startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
-import { getDisplayAmount } from '../utils/currencyHelpers'
-import { PAYMENT_METHOD_LABELS } from '../utils/constants'
+import { startOfCurrentMonth, endOfCurrentMonth } from '../utils/formatters'
 
 export default function Expenses() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
+  const location = useLocation()
   const { items: expenses, pagination, loading, filters, displayCurrency } = useSelector((state) => state.expenses)
   const { items: categories } = useSelector((state) => state.categories)
   const [page, setPage] = useState(1)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [deleteId, setDeleteId] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [sort, setSort] = useState({ field: 'date', dir: 'desc' })
+
+  const handleEdit = (expense) => {
+    const targetId = expense.installment_group_id || expense.id
+    navigate(`/expenses/${targetId}/edit`, { state: { from: location.pathname } })
+  }
+
+  const handleSort = (field) =>
+    setSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }))
 
   useEffect(() => {
     dispatch(fetchCategories())
@@ -173,107 +181,14 @@ export default function Expenses() {
         />
       ) : (
         <Card className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-neutral">
-                  <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3">Descripción</th>
-                  <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Categoría</th>
-                  <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden md:table-cell">Fecha</th>
-                  <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden lg:table-cell">Método</th>
-                  <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Monto</th>
-                  <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Moneda</th>
-                  <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expenses.map((expense, i) => (
-                  <tr key={expense.id} className={`border-b border-neutral last:border-0 hover:bg-gray-50 ${i % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="text-sm font-medium text-primary">{expense.description}</p>
-                        {!!expense.is_installment && !!expense.installment_number && (
-                          <Badge variant="info" className="mt-0.5 text-xs">
-                            Cuota {expense.installment_number}/{expense.total_installments}
-                          </Badge>
-                        )}
-                        {!!expense.is_installment && !expense.installment_number && (
-                          <Badge variant="warning" className="mt-0.5 text-xs">
-                            {expense.total_installments} cuotas
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: expense.category?.color || '#ccc' }}
-                        />
-                        <span className="text-sm text-primary">{expense.category?.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell text-sm text-primary">
-                      {formatDate(expense.date)}
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      <Badge variant={expense.payment_method === 'cash' ? 'success' : 'info'}>
-                        {PAYMENT_METHOD_LABELS[expense.payment_method]}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-sm text-primary">
-                      <div>
-                        <span>
-                          {formatCurrency(getDisplayAmount(expense, displayCurrency))}
-                        </span>
-                        {displayCurrency !== 'original' && (
-                          <span className="text-xs text-neutral-darker block">
-                            (orig: {formatCurrency(expense.original_amount)} {expense.original_currency})
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell text-right">
-                      <Badge variant={expense.original_currency === 'ARS' ? 'warning' : 'info'}>
-                        {expense.original_currency}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        {!expense.installment_group_id && (
-                          <button
-                            onClick={() => navigate(`/expenses/${expense.id}/edit`)}
-                            className="p-1.5 text-neutral-darker hover:text-secondary rounded transition-colors"
-                            title="Editar"
-                          >
-                            <FiEdit2 size={15} />
-                          </button>
-                        )}
-                        {!expense.installment_group_id && (
-                          <button
-                            onClick={() => setDeleteId(expense.id)}
-                            className="p-1.5 text-neutral-darker hover:text-danger rounded transition-colors"
-                            title="Eliminar"
-                          >
-                            <FiTrash2 size={15} />
-                          </button>
-                        )}
-                        {expense.installment_group_id && (
-                          <button
-                            onClick={() => navigate(`/expenses/${expense.installment_group_id}/edit`)}
-                            className="p-1.5 text-neutral-darker hover:text-secondary rounded transition-colors"
-                            title="Editar gasto padre"
-                          >
-                            <FiEdit2 size={15} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DetailTable
+            expenses={expenses}
+            sort={sort}
+            onSort={handleSort}
+            displayCurrency={displayCurrency}
+            onEdit={handleEdit}
+            onDelete={(id) => setDeleteId(id)}
+          />
 
           {/* Pagination */}
           {pagination && pagination.pages > 1 && (

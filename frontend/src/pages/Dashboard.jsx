@@ -14,7 +14,7 @@ import Button from '../components/UI/Button'
 import Badge from '../components/UI/Badge'
 import Modal from '../components/UI/Modal'
 import DetailTable from '../components/reports/DetailTable'
-import { CatBarLabel, PieLabel } from '../components/reports/ChartLabels'
+import { CatBarLabel } from '../components/reports/ChartLabels'
 import SummaryCard from '../components/UI/SummaryCard'
 import { formatCurrency, formatDate } from '../utils/formatters'
 
@@ -342,8 +342,6 @@ export default function Dashboard() {
                         nameKey="name"
                         cx="50%" cy="50%"
                         outerRadius={80}
-                        labelLine
-                        label={PieLabel}
                         onClick={handleCvcClick}
                         style={{ cursor: 'pointer' }}
                       >
@@ -354,14 +352,6 @@ export default function Dashboard() {
                       <Tooltip formatter={(v) => formatCurrency(v)} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="grid grid-cols-2 gap-4 mt-2">
-                    {cashVsCardData.map((d) => (
-                      <div key={d.name} className="text-center">
-                        <p className="text-xs text-neutral-darker">{d.name}</p>
-                        <p className="text-sm font-semibold font-mono" style={{ color: d.color }}>{formatCurrency(d.value)}</p>
-                      </div>
-                    ))}
-                  </div>
                 </>
               ) : (
                 <p className="text-sm text-neutral-darker text-center py-16">Sin gastos este mes</p>
