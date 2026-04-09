@@ -15,7 +15,11 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:estadisticasbcra.com)",
       "WebFetch(domain:bcra-connector.readthedocs.io)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(wc -l /c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/frontend/src/pages/*.jsx)",
+      "Bash(find /c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/backend/src -name \"*.js\" -type f -exec wc -l {} +)",
+      "Read(//c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/**)",
+      "Bash(find /c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/frontend/src -name \"*.jsx\" -type f -exec wc -l {} +)"
     ]
   }
 }
