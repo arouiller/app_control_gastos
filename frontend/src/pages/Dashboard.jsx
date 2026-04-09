@@ -4,7 +4,7 @@ import { toast } from 'react-toastify'
 import { FiDollarSign, FiCreditCard, FiPlus, FiX, FiTrendingUp } from 'react-icons/fi'
 import {
   BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, ResponsiveContainer,
 } from 'recharts'
 import { analyticsService } from '../services/analyticsService'
 import { expenseService } from '../services/expenseService'
@@ -14,7 +14,7 @@ import Button from '../components/UI/Button'
 import Badge from '../components/UI/Badge'
 import Modal from '../components/UI/Modal'
 import DetailTable from '../components/reports/DetailTable'
-import { CatBarLabel } from '../components/reports/ChartLabels'
+import { PieLabel } from '../components/reports/ChartLabels'
 import SummaryCard from '../components/UI/SummaryCard'
 import { formatCurrency, formatDate } from '../utils/formatters'
 
@@ -305,16 +305,14 @@ export default function Dashboard() {
               <CardTitle className="mb-4">Gastos por Categoría</CardTitle>
               {byCategory.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={byCategory} margin={{ top: 28, right: 4, left: 0, bottom: 45 }}>
+                  <BarChart data={byCategory} margin={{ top: 8, right: 4, left: 0, bottom: 45 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis dataKey="categoryName" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v) => formatCurrency(v)} />
                     <Bar
                       dataKey="totalAmount"
                       name="Total"
                       radius={[4, 4, 0, 0]}
-                      label={(props) => <CatBarLabel {...props} data={byCategory} />}
                       onClick={handleCatClick}
                       style={{ cursor: 'pointer' }}
                     >
@@ -334,14 +332,16 @@ export default function Dashboard() {
               <CardTitle className="mb-4">Efectivo vs Tarjeta</CardTitle>
               {cashVsCardData.length > 0 ? (
                 <>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart margin={{ top: 20, right: 60, bottom: 20, left: 60 }}>
                       <Pie
                         data={cashVsCardData}
                         dataKey="value"
                         nameKey="name"
                         cx="50%" cy="50%"
                         outerRadius={80}
+                        labelLine
+                        label={PieLabel}
                         onClick={handleCvcClick}
                         style={{ cursor: 'pointer' }}
                       >
@@ -349,7 +349,6 @@ export default function Dashboard() {
                           <Cell key={i} fill={entry.color} stroke={isActive(`cvc-${entry.method}`) ? '#111827' : 'white'} strokeWidth={isActive(`cvc-${entry.method}`) ? 3 : 1} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v) => formatCurrency(v)} />
                     </PieChart>
                   </ResponsiveContainer>
                 </>
