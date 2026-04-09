@@ -125,9 +125,14 @@ export default function ExpenseForm() {
       }
 
       if (isEditing) {
-        const updatePayload = { ...payload }
+        const updatePayload = { ...payload, isInstallment }
         if (isInstallment && data.numberOfInstallments) {
-          updatePayload.numberOfInstallments = parseInt(data.numberOfInstallments)
+          const n = parseInt(data.numberOfInstallments)
+          const totalAmount = data.installmentMode === 'perInstallment'
+            ? parseFloat((payload.amount * n).toFixed(2))
+            : payload.amount
+          updatePayload.amount = totalAmount
+          updatePayload.numberOfInstallments = n
         }
         await dispatch(updateExpense({ id, data: updatePayload })).unwrap()
         toast.success('Gasto actualizado')
@@ -240,12 +245,11 @@ export default function ExpenseForm() {
                 <label className="text-sm font-medium text-primary">¿En cuotas?</label>
                 <div className="flex gap-4">
                   {[{ v: false, l: 'No' }, { v: true, l: 'Sí' }].map(({ v, l }) => (
-                    <label key={String(v)} className={`flex items-center gap-2 ${isEditing ? 'opacity-60' : 'cursor-pointer'}`}>
+                    <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
                         checked={isInstallment === v}
-                        onChange={() => !isEditing && setValue('isInstallment', v)}
-                        disabled={isEditing}
+                        onChange={() => setValue('isInstallment', v)}
                         className="text-secondary"
                       />
                       <span className="text-sm">{l}</span>

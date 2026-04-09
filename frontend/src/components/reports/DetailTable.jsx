@@ -77,11 +77,11 @@ export default function DetailTable({ expenses, sort, onSort, displayCurrency, o
                         <FiEdit2 size={14} />
                       </button>
                     )}
-                    {onDelete && !e.installment_group_id && (
+                    {onDelete && (
                       <button
-                        onClick={() => onDelete(e.id)}
+                        onClick={() => onDelete(e)}
                         className="p-1.5 text-neutral-darker hover:text-danger rounded transition-colors"
-                        title="Eliminar"
+                        title={e.installment_group_id ? 'Eliminar todas las cuotas' : 'Eliminar'}
                       >
                         <FiTrash2 size={14} />
                       </button>

@@ -23,7 +23,7 @@ export default function Expenses() {
   const { items: categories } = useSelector((state) => state.categories)
   const [page, setPage] = useState(1)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [deleteId, setDeleteId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null) // { id, isInstallment, totalInstallments }
   const [deleting, setDeleting] = useState(false)
   const [sort, setSort] = useState({ field: 'date', dir: 'desc' })
 
@@ -55,9 +55,9 @@ export default function Expenses() {
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      await dispatch(deleteExpense(deleteId)).unwrap()
+      await dispatch(deleteExpense(deleteTarget.id)).unwrap()
       toast.success('Gasto eliminado')
-      setDeleteId(null)
+      setDeleteTarget(null)
     } catch {
       toast.error('Error al eliminar gasto')
     } finally {
@@ -187,7 +187,7 @@ export default function Expenses() {
             onSort={handleSort}
             displayCurrency={displayCurrency}
             onEdit={handleEdit}
-            onDelete={(id) => setDeleteId(id)}
+            onDelete={(e) => setDeleteTarget({ id: e.installment_group_id || e.id, isInstallment: !!(e.is_installment || e.installment_group_id), totalInstallments: e.total_installments })}
           />
 
           {/* Pagination */}
@@ -214,12 +214,14 @@ export default function Expenses() {
       )}
 
       {/* Delete confirmation modal */}
-      <Modal isOpen={!!deleteId} onClose={() => setDeleteId(null)} title="Eliminar Gasto">
+      <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Eliminar Gasto">
         <p className="text-sm text-primary mb-6">
-          ¿Estás seguro de que quieres eliminar este gasto? Esta acción no se puede deshacer.
+          {deleteTarget?.isInstallment
+            ? `Este gasto tiene ${deleteTarget.totalInstallments} cuotas. Se eliminarán el gasto completo y todas sus cuotas. Esta acción no se puede deshacer.`
+            : '¿Estás seguro de que quieres eliminar este gasto? Esta acción no se puede deshacer.'}
         </p>
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => setDeleteId(null)}>Cancelar</Button>
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
           <Button variant="danger" loading={deleting} onClick={handleDelete}>Eliminar</Button>
         </div>
       </Modal>
