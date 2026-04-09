@@ -5,7 +5,6 @@ import { installmentService } from '../services/installmentService'
 import { categoryService } from '../services/categoryService'
 import Card, { CardTitle } from '../components/UI/Card'
 import Badge from '../components/UI/Badge'
-import Select from '../components/UI/Select'
 import { PageLoader } from '../components/UI/LoadingSpinner'
 import EmptyState from '../components/UI/EmptyState'
 import MonthlyChart from '../components/reports/MonthlyChart'
@@ -49,18 +48,19 @@ export default function Installments() {
   const [chartRows, setChartRows] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
-  const [categoryId, setCategoryId] = useState('')
+  const [categoryIds, setCategoryIds] = useState([])
   const [displayCurrency, setDisplayCurrency] = useState('ARS')
 
-  const categoryOptions = [
-    { value: '', label: 'Todas las categorías' },
-    ...categories.map((c) => ({ value: String(c.id), label: c.name })),
-  ]
+  const toggleCategory = (id) => {
+    setCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    )
+  }
 
-  const loadData = async (catId) => {
+  const loadData = async (catIds) => {
     setLoading(true)
     try {
-      const params = catId ? { categoryId: catId } : {}
+      const params = catIds && catIds.length > 0 ? { categoryIds: catIds.join(',') } : {}
       const [groupedRes, chartRes] = await Promise.all([
         installmentService.getGrouped(params),
         installmentService.getMonthlyChart(params),
@@ -81,8 +81,8 @@ export default function Installments() {
   }, [])
 
   useEffect(() => {
-    loadData(categoryId || undefined)
-  }, [categoryId])
+    loadData(categoryIds)
+  }, [categoryIds])
 
   // Totals from grouped data (affected by category filter)
   const totals = useMemo(() => {
@@ -118,14 +118,6 @@ export default function Installments() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-primary">Cuotas</h1>
         <div className="flex gap-2 items-center flex-wrap">
-          {/* Category filter */}
-          <div className="w-48">
-            <Select
-              options={categoryOptions}
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            />
-          </div>
           {/* Currency toggle */}
           <div className="flex gap-0.5 bg-neutral rounded-lg p-1">
             {[['ARS', '$'], ['USD', 'U$D']].map(([val, lbl]) => (
@@ -142,6 +134,41 @@ export default function Installments() {
           </div>
         </div>
       </div>
+
+      {/* Category filter — pill buttons */}
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <button
+            onClick={() => setCategoryIds([])}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+              categoryIds.length === 0
+                ? 'bg-primary text-white border-transparent'
+                : 'bg-white text-neutral-darker border-neutral hover:border-primary hover:text-primary'
+            }`}
+          >
+            Todas
+          </button>
+          {categories.map((cat) => {
+            const active = categoryIds.includes(cat.id)
+            return (
+              <button
+                key={cat.id}
+                onClick={() => toggleCategory(cat.id)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                  active ? 'text-white border-transparent' : 'bg-white text-neutral-darker border-neutral'
+                }`}
+                style={active ? { backgroundColor: cat.color, borderColor: cat.color } : {}}
+              >
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: active ? 'rgba(255,255,255,0.6)' : cat.color }}
+                />
+                {cat.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {loading ? (
         <div className="py-12"><PageLoader /></div>

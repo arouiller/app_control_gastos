@@ -7,11 +7,19 @@ const formatMonthLabel = (key) => {
   return `${MONTH_NAMES_ES[parseInt(month, 10) - 1]} ${year}`;
 };
 
+const parseCategoryFilter = (categoryId, categoryIdsStr) => {
+  const ids = categoryIdsStr
+    ? categoryIdsStr.split(',').map(Number).filter(Boolean)
+    : categoryId ? [parseInt(categoryId)] : [];
+  return ids;
+};
+
 // Pending child installments (date > today), filtered by category, multi-currency
 const listInstallments = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, categoryId } = req.query;
+    const { page = 1, limit = 20, categoryId, categoryIds: categoryIdsStr } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
+    const catIds = parseCategoryFilter(categoryId, categoryIdsStr);
 
     let where = `WHERE ewc.user_id = ?
       AND ewc.is_installment = TRUE
@@ -19,9 +27,9 @@ const listInstallments = async (req, res, next) => {
       AND ewc.expense_date > CURDATE()`;
     const params = [req.user.id];
 
-    if (categoryId) {
-      where += ' AND ewc.category_id = ?';
-      params.push(parseInt(categoryId));
+    if (catIds.length > 0) {
+      where += ` AND ewc.category_id IN (${catIds.map(() => '?').join(',')})`;
+      params.push(...catIds);
     }
 
     const [[{ count }]] = await sequelize.query(
@@ -70,13 +78,14 @@ const listInstallments = async (req, res, next) => {
 // Parent expenses grouped with paid/pending counts and amounts in all currencies
 const getGrouped = async (req, res, next) => {
   try {
-    const { categoryId } = req.query;
+    const { categoryId, categoryIds: categoryIdsStr } = req.query;
+    const catIds = parseCategoryFilter(categoryId, categoryIdsStr);
     const params = [req.user.id];
     let filter = '';
 
-    if (categoryId) {
-      filter = 'AND parent.category_id = ?';
-      params.push(parseInt(categoryId));
+    if (catIds.length > 0) {
+      filter = `AND parent.category_id IN (${catIds.map(() => '?').join(',')})`;
+      params.push(...catIds);
     }
 
     const rows = await sequelize.query(
@@ -148,13 +157,14 @@ const getGrouped = async (req, res, next) => {
 // Monthly pending installments by category (for chart)
 const getMonthlyChart = async (req, res, next) => {
   try {
-    const { categoryId } = req.query;
+    const { categoryId, categoryIds: categoryIdsStr } = req.query;
+    const catIds = parseCategoryFilter(categoryId, categoryIdsStr);
     const params = [req.user.id];
     let filter = '';
 
-    if (categoryId) {
-      filter = 'AND ewc.category_id = ?';
-      params.push(parseInt(categoryId));
+    if (catIds.length > 0) {
+      filter = `AND ewc.category_id IN (${catIds.map(() => '?').join(',')})`;
+      params.push(...catIds);
     }
 
     const rows = await sequelize.query(

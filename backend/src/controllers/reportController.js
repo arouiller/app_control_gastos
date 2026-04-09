@@ -164,39 +164,55 @@ const monthlyGroupingDetails = async (req, res, next) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
     const offset = (pageNum - 1) * limitNum;
 
-    const { count, rows } = await Expense.findAndCountAll({
-      where: {
-        user_id: userId,
-        category_id: catId,
-        date: { [Op.between]: [dateFrom, dateTo] },
-        // Exclude installment parents to avoid double-counting
-        [Op.or]: [
-          { is_installment: false },
-          { installment_group_id: { [Op.ne]: null } },
-        ],
-      },
-      order: [['date', 'DESC']],
-      limit: limitNum,
-      offset,
-    });
+    const [countRow] = await Expense.sequelize.query(
+      `SELECT COUNT(*) AS cnt
+       FROM expenses_with_conversions ewc
+       WHERE ewc.user_id = ? AND ewc.category_id = ?
+         AND ewc.expense_date BETWEEN ? AND ?
+         AND (ewc.is_installment = FALSE OR ewc.installment_group_id IS NOT NULL)`,
+      { replacements: [userId, catId, dateFrom, dateTo], type: QueryTypes.SELECT }
+    );
+    const count = parseInt(countRow.cnt, 10);
 
-    const total = rows.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+    const rows = await Expense.sequelize.query(
+      `SELECT ewc.id, ewc.description,
+          ewc.original_amount AS amount,
+          ewc.amount_in_ars AS amountInArs,
+          ewc.amount_in_usd AS amountInUsd,
+          ewc.expense_date AS date,
+          ewc.payment_method AS paymentMethod,
+          ewc.is_installment AS isInstallment,
+          ewc.installment_number AS installmentNumber,
+          ewc.total_installments AS totalInstallments,
+          ewc.notes, ewc.created_at AS createdAt
+       FROM expenses_with_conversions ewc
+       WHERE ewc.user_id = ? AND ewc.category_id = ?
+         AND ewc.expense_date BETWEEN ? AND ?
+         AND (ewc.is_installment = FALSE OR ewc.installment_group_id IS NOT NULL)
+       ORDER BY ewc.expense_date DESC
+       LIMIT ? OFFSET ?`,
+      { replacements: [userId, catId, dateFrom, dateTo, limitNum, offset], type: QueryTypes.SELECT }
+    );
+
+    const totalArs = rows.reduce((s, e) => s + parseFloat(e.amountInArs || 0), 0);
 
     return success(res, {
       month,
       category: { id: category.id, name: category.name, color: category.color },
-      total: parseFloat(total.toFixed(2)),
+      total: parseFloat(totalArs.toFixed(2)),
       expenses: rows.map((e) => ({
         id: e.id,
         description: e.description,
-        amount: parseFloat(e.amount),
+        amount: parseFloat(e.amount || 0),
+        amountInArs: parseFloat(e.amountInArs || 0),
+        amountInUsd: parseFloat(e.amountInUsd || 0),
         date: e.date,
-        paymentMethod: e.payment_method,
-        isInstallment: e.is_installment,
-        installmentNumber: e.installment_number || null,
-        totalInstallments: e.total_installments || null,
+        paymentMethod: e.paymentMethod,
+        isInstallment: !!e.isInstallment,
+        installmentNumber: e.installmentNumber || null,
+        totalInstallments: e.totalInstallments || null,
         notes: e.notes,
-        createdAt: e.created_at,
+        createdAt: e.createdAt,
       })),
       pagination: { page: pageNum, limit: limitNum, total: count },
     });
