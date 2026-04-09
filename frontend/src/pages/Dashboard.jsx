@@ -14,7 +14,7 @@ import Button from '../components/UI/Button'
 import Badge from '../components/UI/Badge'
 import Modal from '../components/UI/Modal'
 import DetailTable from '../components/reports/DetailTable'
-import { PieLabel } from '../components/reports/ChartLabels'
+import { CatBarLabel, PieLabel } from '../components/reports/ChartLabels'
 import SummaryCard from '../components/UI/SummaryCard'
 import { formatCurrency, formatDate } from '../utils/formatters'
 
@@ -305,7 +305,7 @@ export default function Dashboard() {
               <CardTitle className="mb-4">Gastos por Categoría</CardTitle>
               {byCategory.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={byCategory} margin={{ top: 8, right: 4, left: 0, bottom: 45 }}>
+                  <BarChart data={byCategory} margin={{ top: 28, right: 4, left: 0, bottom: 45 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis dataKey="categoryName" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
@@ -313,6 +313,7 @@ export default function Dashboard() {
                       dataKey="totalAmount"
                       name="Total"
                       radius={[4, 4, 0, 0]}
+                      label={(props) => <CatBarLabel {...props} data={byCategory} />}
                       onClick={handleCatClick}
                       style={{ cursor: 'pointer' }}
                     >
