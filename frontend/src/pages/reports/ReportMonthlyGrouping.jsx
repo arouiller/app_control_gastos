@@ -177,6 +177,7 @@ export default function ReportMonthlyGrouping() {
             categories={data?.categories || []}
             onBarClick={(month, cat) => openDetailModal(month, cat)}
             onMonthClick={(month) => openMonthDetail(month)}
+            onEmptyClick={() => selectedMonth && openMonthDetail(selectedMonth)}
           />
 
           {/* Inline detail table */}
