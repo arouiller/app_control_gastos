@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useDispatch, useSelector } from 'react-redux'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { createExpense, createInstallmentExpense, updateExpense } from '../store/expensesSlice'
 import { fetchCategories } from '../store/categoriesSlice'
@@ -32,6 +32,8 @@ export default function ExpenseForm() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { id } = useParams()
+  const location = useLocation()
+  const returnTo = location.state?.from || '/expenses'
   const isEditing = Boolean(id)
 
   const { items: categories } = useSelector((state) => state.categories)
@@ -145,7 +147,7 @@ export default function ExpenseForm() {
         await dispatch(createExpense(payload)).unwrap()
         toast.success('Gasto registrado')
       }
-      navigate('/expenses')
+      navigate(returnTo)
     } catch (err) {
       toast.error(err || 'Error al guardar gasto')
     } finally {
@@ -299,7 +301,7 @@ export default function ExpenseForm() {
           />
 
           <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={() => navigate('/expenses')}>
+            <Button type="button" variant="secondary" onClick={() => navigate(returnTo)}>
               Cancelar
             </Button>
             <Button type="submit" loading={loading} fullWidth>
