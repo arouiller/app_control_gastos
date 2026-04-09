@@ -53,7 +53,7 @@ function CustomXAxisTick({ x, y, payload, chartData, onMonthClick }) {
   )
 }
 
-export default function MonthlyChart({ data, categories, onBarClick, onMonthClick }) {
+export default function MonthlyChart({ data, categories, onBarClick, onMonthClick, onEmptyClick }) {
   const [hiddenCategories, setHiddenCategories] = useState({})
 
   const toggleCategory = (catId) => {
@@ -86,6 +86,11 @@ export default function MonthlyChart({ data, categories, onBarClick, onMonthClic
           data={data}
           margin={{ top: 24, right: 4, left: 0, bottom: 40 }}
           barCategoryGap="20%"
+          onClick={(chartData) => {
+            if (onEmptyClick && (!chartData?.activePayload || chartData.activePayload.length === 0)) {
+              onEmptyClick()
+            }
+          }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
           <XAxis
