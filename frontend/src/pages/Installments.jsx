@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import { FiCreditCard, FiEdit2, FiTrash2 } from 'react-icons/fi'
+import { FiCreditCard, FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi'
 import { installmentService } from '../services/installmentService'
 import { categoryService } from '../services/categoryService'
 import { expenseService } from '../services/expenseService'
@@ -12,7 +12,16 @@ import Button from '../components/UI/Button'
 import { PageLoader } from '../components/UI/LoadingSpinner'
 import EmptyState from '../components/UI/EmptyState'
 import MonthlyChart from '../components/reports/MonthlyChart'
-import { formatCurrency, formatDate } from '../utils/formatters'
+import { formatCurrency } from '../utils/formatters'
+
+const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+const formatMonthYear = (dateStr) => {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr + 'T12:00:00')
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`
+}
+
+const SESSION_KEY = 'installments_categoryIds'
 
 // Build MonthlyChart-compatible data from the chart API rows
 function buildChartData(rows, displayCurrency) {
@@ -50,17 +59,39 @@ function buildChartData(rows, displayCurrency) {
 export default function Installments() {
   const navigate = useNavigate()
   const location = useLocation()
+
   const [grouped, setGrouped] = useState([])
   const [chartRows, setChartRows] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
-  const [categoryIds, setCategoryIds] = useState([])
   const [displayCurrency, setDisplayCurrency] = useState('USD')
-  const [deleteTarget, setDeleteTarget] = useState(null) // { id, totalInstallments }
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Restore category filter from sessionStorage (survives navigation to/from ExpenseForm)
+  const [categoryIds, setCategoryIds] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY)
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
+
+  const saveCategoryIds = (ids) => {
+    setCategoryIds(ids)
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(ids)) } catch {}
+  }
 
   const handleEdit = (row) => {
     navigate(`/expenses/${row.id}/edit`, { state: { from: location.pathname } })
+  }
+
+  const handleNewInstallment = () => {
+    navigate('/expenses/new', {
+      state: {
+        from: location.pathname,
+        preset: { paymentMethod: 'credit_card', isInstallment: true },
+      },
+    })
   }
 
   const handleDeleteConfirm = async () => {
@@ -79,8 +110,8 @@ export default function Installments() {
   }
 
   const toggleCategory = (id) => {
-    setCategoryIds((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    saveCategoryIds(
+      categoryIds.includes(id) ? categoryIds.filter((c) => c !== id) : [...categoryIds, id]
     )
   }
 
@@ -111,7 +142,6 @@ export default function Installments() {
     loadData(categoryIds)
   }, [categoryIds])
 
-  // Totals from grouped data (affected by category filter)
   const totals = useMemo(() => {
     const field = displayCurrency === 'ARS' ? 'inArs' : 'inUsd'
     return grouped.reduce(
@@ -129,7 +159,6 @@ export default function Installments() {
     [chartRows, displayCurrency]
   )
 
-  // Amount display helper for parent table
   const getAmount = (row, field) => {
     const key = displayCurrency === 'ARS' ? 'inArs' : 'inUsd'
     return row[key][field]
@@ -166,7 +195,7 @@ export default function Installments() {
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-2 items-center">
           <button
-            onClick={() => setCategoryIds(categories.map((c) => c.id))}
+            onClick={() => saveCategoryIds(categories.map((c) => c.id))}
             className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
               categoryIds.length === categories.length
                 ? 'bg-primary text-white border-transparent'
@@ -176,7 +205,7 @@ export default function Installments() {
             Todas
           </button>
           <button
-            onClick={() => setCategoryIds([])}
+            onClick={() => saveCategoryIds([])}
             className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
               categoryIds.length === 0
                 ? 'bg-primary text-white border-transparent'
@@ -213,7 +242,7 @@ export default function Installments() {
         <EmptyState title="Sin cuotas registradas" description="No hay gastos en cuotas registrados" />
       ) : (
         <>
-          {/* Summary card — total pending */}
+          {/* Summary cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <div className="flex items-start justify-between">
@@ -246,8 +275,15 @@ export default function Installments() {
 
           {/* Parent table */}
           <Card className="p-0 overflow-hidden">
-            <div className="px-4 py-3 border-b border-neutral">
+            <div className="px-4 py-3 border-b border-neutral flex items-center justify-between">
               <CardTitle>Gastos en Cuotas</CardTitle>
+              <button
+                onClick={handleNewInstallment}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-white text-xs font-semibold rounded-lg hover:bg-secondary/90 transition-colors"
+              >
+                <FiPlus size={13} />
+                Nuevo gasto en cuotas
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -256,6 +292,7 @@ export default function Installments() {
                     <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3">Descripción</th>
                     <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Categoría</th>
                     <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Primera cuota</th>
+                    <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Última cuota</th>
                     <th className="text-center text-xs font-semibold text-neutral-darker px-4 py-3">Cuotas</th>
                     <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3 hidden md:table-cell">Pagado</th>
                     <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Pendiente</th>
@@ -278,7 +315,10 @@ export default function Installments() {
                         ) : <span className="text-neutral-darker">—</span>}
                       </td>
                       <td className="px-4 py-3 hidden sm:table-cell text-sm text-neutral-darker">
-                        {formatDate(row.startDate)}
+                        {formatMonthYear(row.startDate)}
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell text-sm text-neutral-darker">
+                        {formatMonthYear(row.endDate)}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex flex-col items-center gap-0.5">
