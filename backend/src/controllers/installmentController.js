@@ -91,6 +91,7 @@ const getGrouped = async (req, res, next) => {
     const rows = await sequelize.query(
       `SELECT
         parent.id, parent.description, parent.date AS start_date,
+        MAX(ewc.expense_date) AS end_date,
         parent.total_installments, parent.category_id,
         parent.currency AS original_currency,
         c.name AS cat_name, c.color AS cat_color,
@@ -123,6 +124,7 @@ const getGrouped = async (req, res, next) => {
       id: r.id,
       description: r.description,
       startDate: r.start_date,
+      endDate: r.end_date,
       totalInstallments: parseInt(r.total_installments || 0),
       originalCurrency: r.original_currency,
       category: r.category_id ? { id: r.category_id, name: r.cat_name, color: r.cat_color } : null,

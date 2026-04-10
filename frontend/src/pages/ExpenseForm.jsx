@@ -40,12 +40,14 @@ export default function ExpenseForm() {
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(isEditing)
 
+  const preset = location.state?.preset || {}
+
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(baseSchema),
     defaultValues: {
       date: today(),
-      paymentMethod: 'cash',
-      isInstallment: false,
+      paymentMethod: preset.paymentMethod || 'cash',
+      isInstallment: preset.isInstallment || false,
       installmentMode: 'total',
       currency: 'ARS',
     },
