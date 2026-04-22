@@ -1,3 +1,4 @@
+const https = require('https');
 const {
   fetchAndSaveDailyRate,
   loadHistoricalRates,
@@ -129,10 +130,128 @@ const getLogsHandler = async (req, res, next) => {
   }
 };
 
+// POST /api/admin/exchange-rates/diagnostics
+const diagnosticsHandler = async (req, res) => {
+  console.log('[ExchangeRateController] INICIANDO DIAGNÓSTICOS DE BCRA');
+
+  const BCRA_BASE_URL = 'https://api.bcra.gob.ar/estadisticas/v4.0/monetarias/4';
+  const today = new Date().toISOString().split('T')[0];
+  const testUrl = `${BCRA_BASE_URL}?desde=${today}&hasta=${today}`;
+
+  const diagnostics = {
+    timestamp: new Date().toISOString(),
+    bcra_url: testUrl,
+    attempts: [],
+  };
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const attemptResult = {
+      attempt: attempt + 1,
+      timestamp: new Date().toISOString(),
+      status: null,
+      statusCode: null,
+      responseLength: null,
+      error: null,
+      duration_ms: null,
+    };
+
+    const startTime = Date.now();
+
+    try {
+      await new Promise((resolve, reject) => {
+        const req = https.get(testUrl, { rejectUnauthorized: true }, (res) => {
+          let body = '';
+          attemptResult.statusCode = res.statusCode;
+          attemptResult.headers = res.headers;
+
+          res.on('data', (chunk) => { body += chunk; });
+          res.on('end', () => {
+            attemptResult.responseLength = body.length;
+            attemptResult.status = 'completed';
+            if (res.statusCode === 200) {
+              try {
+                const parsed = JSON.parse(body);
+                attemptResult.response_structure = {
+                  has_results: !!parsed.results,
+                  has_detalle: !!parsed.results?.[0]?.detalle,
+                  detalle_length: parsed.results?.[0]?.detalle?.length || 0,
+                };
+              } catch (e) {
+                attemptResult.parse_error = e.message;
+              }
+            }
+            attemptResult.duration_ms = Date.now() - startTime;
+            resolve();
+          });
+        });
+
+        req.setTimeout(10000, () => {
+          attemptResult.status = 'timeout';
+          attemptResult.duration_ms = Date.now() - startTime;
+          req.destroy();
+          reject(new Error('Timeout 10s'));
+        });
+
+        req.on('error', (err) => {
+          attemptResult.status = 'error';
+          attemptResult.error = {
+            name: err.name,
+            message: err.message,
+            code: err.code,
+          };
+          attemptResult.duration_ms = Date.now() - startTime;
+          reject(err);
+        });
+      });
+    } catch (err) {
+      if (!attemptResult.error) {
+        attemptResult.error = {
+          name: err.name,
+          message: err.message,
+        };
+      }
+      attemptResult.duration_ms = Date.now() - startTime;
+    }
+
+    diagnostics.attempts.push(attemptResult);
+
+    // Wait before next attempt
+    if (attempt < 2) {
+      const delayMs = Math.pow(2, attempt) * 1000;
+      console.log(`[Diagnostics] Waiting ${delayMs}ms before next attempt...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  // Summary
+  const successAttempts = diagnostics.attempts.filter(a => a.statusCode === 200);
+  const failedAttempts = diagnostics.attempts.filter(a => a.statusCode && a.statusCode !== 200);
+  const errorAttempts = diagnostics.attempts.filter(a => a.error);
+
+  diagnostics.summary = {
+    total_attempts: diagnostics.attempts.length,
+    successful: successAttempts.length,
+    http_errors: failedAttempts.length,
+    network_errors: errorAttempts.length,
+    bcra_status: successAttempts.length > 0 ? 'ONLINE' : 'OFFLINE',
+    recommendation: successAttempts.length > 0
+      ? '✅ BCRA está disponible. El fallback debería funcionar.'
+      : failedAttempts.length > 0
+        ? `⚠️ BCRA retorna HTTP ${failedAttempts[0].statusCode}. Posible problema del servidor.`
+        : '❌ No hay conectividad a BCRA. Problema de red o firewall.',
+  };
+
+  return res.status(200).json({
+    success: true,
+    data: diagnostics,
+  });
+};
+
 module.exports = {
   getRateByDateHandler,
   getRecentRatesHandler,
   loadHistoricalHandler,
   triggerDailyFetchHandler,
   getLogsHandler,
+  diagnosticsHandler,
 };

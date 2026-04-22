@@ -7,6 +7,7 @@ const {
   loadHistoricalHandler,
   triggerDailyFetchHandler,
   getLogsHandler,
+  diagnosticsHandler,
 } = require('../controllers/exchangeRateController');
 
 router.use(authenticate, requireAdmin);
@@ -19,5 +20,6 @@ router.get('/exchange-rates/recent', getRecentRatesHandler);
 router.get('/exchange-rates/logs', getLogsHandler);
 router.post('/exchange-rates/load-historical', loadHistoricalHandler);
 router.post('/exchange-rates/trigger', triggerDailyFetchHandler);
+router.post('/exchange-rates/diagnostics', diagnosticsHandler);
 
 module.exports = router;
