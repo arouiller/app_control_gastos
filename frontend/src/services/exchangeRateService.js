@@ -30,10 +30,16 @@ const getRateByDate = async (date) => {
   return data.data
 }
 
+const runDiagnostics = async () => {
+  const { data } = await api.post('/admin/exchange-rates/diagnostics')
+  return data.data
+}
+
 export const exchangeRateService = {
   getRecentRates,
   getLogs,
   loadHistorical,
   triggerDailyFetch,
   getRateByDate,
+  runDiagnostics,
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FiTrendingUp, FiRefreshCw, FiDownload, FiAlertCircle } from 'react-icons/fi'
+import { FiTrendingUp, FiRefreshCw, FiDownload, FiAlertCircle, FiZap } from 'react-icons/fi'
 import { exchangeRateService } from '../services/exchangeRateService'
 import Card, { CardTitle } from '../components/UI/Card'
 import { PageLoader } from '../components/UI/LoadingSpinner'
@@ -53,6 +53,11 @@ export default function ExchangeRates() {
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [logsLoading, setLogsLoading] = useState(false)
+
+  // Diagnostics
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false)
+  const [diagnosticsResult, setDiagnosticsResult] = useState(null)
+  const [diagnosticsError, setDiagnosticsError] = useState(null)
 
   async function loadData() {
     try {
@@ -127,6 +132,20 @@ export default function ExchangeRates() {
     }
   }
 
+  async function handleDiagnostics() {
+    setDiagnosticsLoading(true)
+    setDiagnosticsResult(null)
+    setDiagnosticsError(null)
+    try {
+      const result = await exchangeRateService.runDiagnostics()
+      setDiagnosticsResult(result)
+    } catch (err) {
+      setDiagnosticsError(err.response?.data?.error?.message || 'Error al ejecutar diagnósticos')
+    } finally {
+      setDiagnosticsLoading(false)
+    }
+  }
+
   if (loading) return <PageLoader />
 
   return (
@@ -146,8 +165,55 @@ export default function ExchangeRates() {
             <FiRefreshCw size={14} />
             Obtener cotización de hoy
           </Button>
+          <Button variant="ghost" size="sm" loading={diagnosticsLoading} onClick={handleDiagnostics}>
+            <FiZap size={14} />
+            Diagnóstico
+          </Button>
         </div>
       </div>
+
+      {diagnosticsError && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-danger-bg text-danger-text text-sm rounded-md">
+          <FiAlertCircle size={14} />
+          {diagnosticsError}
+        </div>
+      )}
+
+      {diagnosticsResult && (
+        <Card>
+          <CardTitle className="mb-4">Diagnóstico API BCRA</CardTitle>
+          <div className="space-y-3">
+            <div className="text-xs">
+              <p className="text-neutral-darker mb-2"><strong>URL:</strong> {diagnosticsResult.bcra_url}</p>
+              <p className="text-neutral-darker mb-2"><strong>Estado:</strong> <span className={`font-bold ${diagnosticsResult.summary?.bcra_status === 'ONLINE' ? 'text-success-text' : 'text-danger-text'}`}>{diagnosticsResult.summary?.bcra_status}</span></p>
+              <p className="text-neutral-darker mb-3"><strong>Recomendación:</strong> {diagnosticsResult.summary?.recommendation}</p>
+            </div>
+
+            <div className="border-t border-neutral pt-3">
+              <p className="font-medium text-sm mb-2">Intentos realizados:</p>
+              {diagnosticsResult.attempts?.map((attempt, idx) => (
+                <div key={idx} className="mb-3 p-2 bg-neutral/30 rounded text-xs">
+                  <p className="font-mono text-primary">
+                    Intento {attempt.attempt}:
+                    <span className={attempt.statusCode === 200 ? 'text-success-text' : 'text-danger-text'}>
+                      {' '}{attempt.statusCode || 'ERROR'} {attempt.statusMessage || ''}
+                    </span>
+                    {' '}({attempt.duration_ms}ms)
+                  </p>
+                  {attempt.error && (
+                    <p className="text-danger-text mt-1">{attempt.error.message}</p>
+                  )}
+                  {attempt.error_response && (
+                    <p className="text-neutral-darker mt-1 font-mono text-xs break-words">
+                      Respuesta: {attempt.error_response.substring(0, 200)}...
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Carga histórica */}
       <Card>
