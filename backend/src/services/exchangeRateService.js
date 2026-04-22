@@ -15,7 +15,13 @@ async function fetchFromBCRA(fechaDesde, fechaHasta, maxRetries = 3) {
       logger.info(`[ExchangeRate] Consultando BCRA (intento ${attempt + 1}/${maxRetries}): ${url}`);
 
       return await new Promise((resolve, reject) => {
-        const req = https.get(url, { rejectUnauthorized: true }, (res) => {
+        const options = {
+          rejectUnauthorized: true,
+          headers: {
+            'User-Agent': 'App-Control-Gastos/1.0 (Node.js)',
+          },
+        };
+        const req = https.get(url, options, (res) => {
           let body = '';
           res.on('data', (chunk) => { body += chunk; });
           res.on('end', () => {

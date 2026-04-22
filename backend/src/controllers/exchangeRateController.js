@@ -159,15 +159,27 @@ const diagnosticsHandler = async (req, res) => {
 
     try {
       await new Promise((resolve, reject) => {
-        const req = https.get(testUrl, { rejectUnauthorized: true }, (res) => {
+        const options = {
+          rejectUnauthorized: true,
+          headers: {
+            'User-Agent': 'App-Control-Gastos/1.0 (Node.js)',
+          },
+        };
+        const req = https.get(testUrl, options, (res) => {
           let body = '';
           attemptResult.statusCode = res.statusCode;
-          attemptResult.headers = res.headers;
+          attemptResult.statusMessage = res.statusMessage;
+          attemptResult.headers = {
+            'content-type': res.headers['content-type'],
+            'content-length': res.headers['content-length'],
+            'server': res.headers['server'],
+          };
 
           res.on('data', (chunk) => { body += chunk; });
           res.on('end', () => {
             attemptResult.responseLength = body.length;
             attemptResult.status = 'completed';
+
             if (res.statusCode === 200) {
               try {
                 const parsed = JSON.parse(body);
@@ -179,7 +191,11 @@ const diagnosticsHandler = async (req, res) => {
               } catch (e) {
                 attemptResult.parse_error = e.message;
               }
+            } else {
+              // Capturar respuesta de error para diagnóstico
+              attemptResult.error_response = body.substring(0, 500);
             }
+
             attemptResult.duration_ms = Date.now() - startTime;
             resolve();
           });
