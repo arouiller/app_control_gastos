@@ -37,12 +37,18 @@ const getRecentRatesHandler = async (req, res, next) => {
 // POST /api/admin/exchange-rates/load-historical
 const loadHistoricalHandler = async (req, res, next) => {
   try {
+    logger.info('[ExchangeRateController] loadHistoricalHandler INICIADO');
+    logger.info(`[ExchangeRateController] req.body = ${JSON.stringify(req.body)}`);
+    logger.info(`[ExchangeRateController] req.user = ${JSON.stringify(req.user)}`);
+
     const today = new Date().toISOString().split('T')[0];
     const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
       .toISOString().split('T')[0];
 
     const fechaDesde = req.body.fecha_desde || oneYearAgo;
     const fechaHasta = req.body.fecha_hasta || today;
+
+    logger.info(`[ExchangeRateController] fechaDesde=${fechaDesde}, fechaHasta=${fechaHasta}`);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaDesde) || !/^\d{4}-\d{2}-\d{2}$/.test(fechaHasta)) {
       return error(res, 'Formato de fecha inválido. Use YYYY-MM-DD', 400);
@@ -54,7 +60,9 @@ const loadHistoricalHandler = async (req, res, next) => {
     const executedBy = req.user?.email || req.user?.id?.toString() || 'admin';
     const t0 = Date.now();
 
+    logger.info(`[ExchangeRateController] Llamando loadHistoricalRates...`);
     const summary = await loadHistoricalRates(fechaDesde, fechaHasta, executedBy);
+    logger.info(`[ExchangeRateController] loadHistoricalRates completado: ${JSON.stringify(summary)}`);
 
     return success(res, {
       status: 'success',
@@ -64,7 +72,7 @@ const loadHistoricalHandler = async (req, res, next) => {
       execution_time_ms: Date.now() - t0,
     });
   } catch (err) {
-    logger.error(`[ExchangeRateController] Error en carga histórica: ${err.message}`);
+    logger.error(`[ExchangeRateController] Error en carga histórica: ${err.message}`, { stack: err.stack });
     next(err);
   }
 };
@@ -72,11 +80,18 @@ const loadHistoricalHandler = async (req, res, next) => {
 // POST /api/admin/exchange-rates/trigger
 const triggerDailyFetchHandler = async (req, res, next) => {
   try {
+    logger.info('[ExchangeRateController] triggerDailyFetchHandler INICIADO');
+    logger.info(`[ExchangeRateController] req.user = ${JSON.stringify(req.user)}`);
+
     const executedBy = req.user?.email || req.user?.id?.toString() || 'admin';
+    logger.info(`[ExchangeRateController] executedBy = ${executedBy}`);
+
     const result = await fetchAndSaveDailyRate('admin_interface', executedBy);
+    logger.info(`[ExchangeRateController] fetchAndSaveDailyRate completado: ${JSON.stringify(result)}`);
+
     return success(res, result);
   } catch (err) {
-    logger.error(`[ExchangeRateController] Error en trigger manual: ${err.message}`);
+    logger.error(`[ExchangeRateController] Error en trigger manual: ${err.message}`, { stack: err.stack });
     next(err);
   }
 };
