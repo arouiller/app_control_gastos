@@ -7,40 +7,55 @@ const TIMEOUT_MS = 30000;
 
 // ─── BCRA API ─────────────────────────────────────────────────────────────────
 
-async function fetchFromBCRA(fechaDesde, fechaHasta) {
+async function fetchFromBCRA(fechaDesde, fechaHasta, maxRetries = 3) {
   const url = `${BCRA_BASE_URL}?desde=${fechaDesde}&hasta=${fechaHasta}`;
-  logger.info(`[ExchangeRate] Consultando BCRA: ${url}`);
 
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { rejectUnauthorized: true }, (res) => {
-      let body = '';
-      res.on('data', (chunk) => { body += chunk; });
-      res.on('end', () => {
-        if (res.statusCode === 404) {
-          resolve([]);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error(`BCRA respondió con HTTP ${res.statusCode}`));
-          return;
-        }
-        try {
-          const parsed = JSON.parse(body);
-          // v4.0: { results: [{ idVariable, detalle: [{ fecha, valor }] }] }
-          const detalle = parsed.results?.[0]?.detalle || [];
-          resolve(detalle);
-        } catch (e) {
-          reject(new Error(`Error parseando respuesta BCRA: ${e.message}`));
-        }
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      logger.info(`[ExchangeRate] Consultando BCRA (intento ${attempt + 1}/${maxRetries}): ${url}`);
+
+      return await new Promise((resolve, reject) => {
+        const req = https.get(url, { rejectUnauthorized: true }, (res) => {
+          let body = '';
+          res.on('data', (chunk) => { body += chunk; });
+          res.on('end', () => {
+            if (res.statusCode === 404) {
+              resolve([]);
+              return;
+            }
+            if (res.statusCode !== 200) {
+              reject(new Error(`BCRA respondió con HTTP ${res.statusCode}`));
+              return;
+            }
+            try {
+              const parsed = JSON.parse(body);
+              // v4.0: { results: [{ idVariable, detalle: [{ fecha, valor }] }] }
+              const detalle = parsed.results?.[0]?.detalle || [];
+              resolve(detalle);
+            } catch (e) {
+              reject(new Error(`Error parseando respuesta BCRA: ${e.message}`));
+            }
+          });
+        });
+
+        req.setTimeout(TIMEOUT_MS, () => {
+          req.destroy(new Error('Timeout: BCRA API no respondió en 30s'));
+        });
+
+        req.on('error', reject);
       });
-    });
+    } catch (err) {
+      logger.warn(`[ExchangeRate] Intento ${attempt + 1} falló: ${err.message}`);
 
-    req.setTimeout(TIMEOUT_MS, () => {
-      req.destroy(new Error('Timeout: BCRA API no respondió en 30s'));
-    });
-
-    req.on('error', reject);
-  });
+      if (attempt < maxRetries - 1) {
+        const delayMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+        logger.info(`[ExchangeRate] Reintentando en ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        throw err;
+      }
+    }
+  }
 }
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -51,6 +66,13 @@ async function getRateForDate(rateDate) {
     { replacements: [rateDate] }
   );
   return rows.length > 0 ? Number(rows[0].ars_to_usd) : null;
+}
+
+async function getLastKnownRate() {
+  const [rows] = await sequelize.query(
+    'SELECT rate_date, ars_to_usd FROM exchange_rates ORDER BY rate_date DESC LIMIT 1'
+  );
+  return rows.length > 0 ? rows[0] : null;
 }
 
 async function logOperation({ operationType, rateDate, oldRate, newRate, source, status, errorMessage, executedBy }) {
@@ -99,12 +121,36 @@ async function fetchAndSaveDailyRate(source = 'cron_job', executedBy = null) {
   try {
     results = await fetchFromBCRA(today, today);
   } catch (err) {
+    logger.error(`[ExchangeRate] BCRA API failed, attempting fallback to last known rate: ${err.message}`);
+
+    // Fallback: use last known rate
+    const lastRate = await getLastKnownRate();
+    if (lastRate) {
+      logger.info(`[ExchangeRate] Fallback: using last known rate from ${lastRate.rate_date}: ${lastRate.ars_to_usd}`);
+      await logOperation({
+        operationType: 'daily_fetch',
+        rateDate: today,
+        source,
+        status: 'skipped',
+        errorMessage: `BCRA API no disponible. Usando tasa del ${lastRate.rate_date}`,
+        executedBy,
+      });
+      return {
+        status: 'skipped_with_fallback',
+        date: today,
+        fallback_date: lastRate.rate_date,
+        fallback_rate: lastRate.ars_to_usd,
+        message: 'BCRA no disponible, usando tasa anterior'
+      };
+    }
+
+    // No fallback available
     await logOperation({
       operationType: 'daily_fetch',
       rateDate: today,
       source,
       status: 'failed',
-      errorMessage: err.message,
+      errorMessage: `BCRA API no disponible y sin datos históricos: ${err.message}`,
       executedBy,
     });
     throw err;
