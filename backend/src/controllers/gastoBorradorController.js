@@ -1,5 +1,5 @@
-const { GastoBorrador, Expense, Installment, Category } = require('../models');
-const AppError = require('../utils/appError');
+const { GastoBorrador, Expense, Installment, Category, sequelize } = require('../models');
+const { success, created, error } = require('../utils/response');
 const { addMonths } = require('date-fns');
 
 // Helper: Check inconsistency between monto_total, cantidad_de_cuotas, and valor_de_la_cuota
@@ -55,15 +55,12 @@ exports.create = async (req, res, next) => {
       status: 'draft',
     });
 
-    res.status(201).json({
-      success: true,
-      data: {
-        ...gastoBorrador.toJSON(),
-        inconsistency_warning,
-      },
+    return created(res, {
+      ...gastoBorrador.toJSON(),
+      inconsistency_warning,
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
@@ -97,7 +94,7 @@ exports.list = async (req, res, next) => {
       order: order.length > 0 ? order : [['created_at', 'DESC']],
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: rows,
       pagination: {
@@ -107,8 +104,8 @@ exports.list = async (req, res, next) => {
         pages: Math.ceil(count / limit),
       },
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
@@ -123,7 +120,7 @@ exports.getById = async (req, res, next) => {
     });
 
     if (!gastoBorrador) {
-      return next(new AppError('Gasto borrador no encontrado', 404));
+      return error(res, 'Gasto borrador no encontrado', 404);
     }
 
     const inconsistency_warning = getInconsistencyWarning(
@@ -132,15 +129,12 @@ exports.getById = async (req, res, next) => {
       gastoBorrador.valor_de_la_cuota
     );
 
-    res.status(200).json({
-      success: true,
-      data: {
-        ...gastoBorrador.toJSON(),
-        inconsistency_warning,
-      },
+    return success(res, {
+      ...gastoBorrador.toJSON(),
+      inconsistency_warning,
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
@@ -156,11 +150,11 @@ exports.update = async (req, res, next) => {
     });
 
     if (!gastoBorrador) {
-      return next(new AppError('Gasto borrador no encontrado', 404));
+      return error(res, 'Gasto borrador no encontrado', 404);
     }
 
     if (gastoBorrador.status !== 'draft') {
-      return next(new AppError('Solo se pueden editar borradores en estado draft', 403));
+      return error(res, 'Solo se pueden editar borradores en estado draft', 403);
     }
 
     // Auto-recalculate valor_de_la_cuota if monto_total or cantidad_de_cuotas changed
@@ -183,15 +177,12 @@ exports.update = async (req, res, next) => {
       gastoBorrador.valor_de_la_cuota
     );
 
-    res.status(200).json({
-      success: true,
-      data: {
-        ...gastoBorrador.toJSON(),
-        inconsistency_warning,
-      },
+    return success(res, {
+      ...gastoBorrador.toJSON(),
+      inconsistency_warning,
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 };
 
@@ -206,27 +197,23 @@ exports.delete = async (req, res, next) => {
     });
 
     if (!gastoBorrador) {
-      return next(new AppError('Gasto borrador no encontrado', 404));
+      return error(res, 'Gasto borrador no encontrado', 404);
     }
 
     if (gastoBorrador.status !== 'draft') {
-      return next(new AppError('Solo se pueden eliminar borradores en estado draft', 403));
+      return error(res, 'Solo se pueden eliminar borradores en estado draft', 403);
     }
 
     await gastoBorrador.destroy();
 
-    res.status(200).json({
-      success: true,
-      message: 'Gasto borrador eliminado',
-    });
-  } catch (error) {
-    next(error);
+    return success(res, { message: 'Gasto borrador eliminado' });
+  } catch (err) {
+    next(err);
   }
 };
 
 // POST /api/gastos-borrador/:id/convertir
 exports.convertir = async (req, res, next) => {
-  const { sequelize } = require('../models');
   const transaction = await sequelize.transaction();
   try {
     const { user } = req;
@@ -240,12 +227,12 @@ exports.convertir = async (req, res, next) => {
 
     if (!gastoBorrador) {
       await transaction.rollback();
-      return next(new AppError('Gasto borrador no encontrado', 404));
+      return error(res, 'Gasto borrador no encontrado', 404);
     }
 
     if (gastoBorrador.status !== 'draft') {
       await transaction.rollback();
-      return next(new AppError('Solo se pueden convertir borradores en estado draft', 403));
+      return error(res, 'Solo se pueden convertir borradores en estado draft', 403);
     }
 
     // Validate category belongs to user
@@ -256,13 +243,13 @@ exports.convertir = async (req, res, next) => {
 
     if (!category) {
       await transaction.rollback();
-      return next(new AppError('Categoría no válida o no pertenece al usuario', 400));
+      return error(res, 'Categoría no válida o no pertenece al usuario', 400);
     }
 
     // Validate amounts
     if (gastoBorrador.monto_total <= 0 || gastoBorrador.valor_de_la_cuota <= 0) {
       await transaction.rollback();
-      return next(new AppError('Montos deben ser positivos', 400));
+      return error(res, 'Montos deben ser positivos', 400);
     }
 
     // Create Expense
@@ -320,15 +307,12 @@ exports.convertir = async (req, res, next) => {
 
     await transaction.commit();
 
-    res.status(201).json({
-      success: true,
-      data: {
-        expense: expenseWithInstallments.toJSON(),
-        gasto_borrador_actualizado: updatedBorrador.toJSON(),
-      },
+    return created(res, {
+      expense: expenseWithInstallments.toJSON(),
+      gasto_borrador_actualizado: updatedBorrador.toJSON(),
     });
-  } catch (error) {
+  } catch (err) {
     await transaction.rollback();
-    next(error);
+    next(err);
   }
 };
