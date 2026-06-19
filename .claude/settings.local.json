@@ -19,7 +19,21 @@
       "Bash(wc -l /c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/frontend/src/pages/*.jsx)",
       "Bash(find /c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/backend/src -name \"*.js\" -type f -exec wc -l {} +)",
       "Read(//c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/**)",
-      "Bash(find /c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/frontend/src -name \"*.jsx\" -type f -exec wc -l {} +)"
+      "Bash(find /c/Users/alejandro.rouiller/Documents/proyectos/App_control_gastos/app_control_gastos/frontend/src -name \"*.jsx\" -type f -exec wc -l {} +)",
+      "Bash(xargs grep *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'debug: add diagnostic logging to exchange rate handlers to identify failure point *)",
+      "Bash(git commit -m 'debug: add response-level diagnostics to identify failure point *)",
+      "Bash(git commit -m 'fix: add resilient BCRA API handling with retries and fallback *)",
+      "Bash(git commit -m 'feat: add BCRA API diagnostics endpoint *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git merge *)",
+      "Bash(git commit -m 'improve: add User-Agent header and error response capture for BCRA diagnostics *)",
+      "Bash(git commit -m 'feat: add BCRA diagnostics UI to ExchangeRates page *)",
+      "Bash(git commit *)",
+      "Bash(git log *)"
     ]
   }
 }
