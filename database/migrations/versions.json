@@ -47,6 +47,14 @@
       "estimatedTime": "< 1 minuto",
       "breaking": false,
       "notes": "Agrega total_installments e installment_number a expenses; actualiza vista expenses_with_conversions"
+    },
+    {
+      "version": "1.0.6",
+      "description": "REQ-006: Sistema de Gastos Borrador (Drafts)",
+      "releaseDate": "2026-06-18",
+      "estimatedTime": "< 1 minuto",
+      "breaking": false,
+      "notes": "Crea tabla gastos_borrador para almacenar gastos en estado borrador antes de convertir a definitivos"
     }
   ]
 }
