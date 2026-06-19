@@ -12,5 +12,6 @@ router.use('/analytics', require('./analytics'));
 router.use('/reports', require('./reports'));
 router.use('/exchange-rates', require('./exchangeRates'));
 router.use('/admin', require('./admin'));
+router.use('/gastos-borrador', require('./gastos-borrador'));
 
 module.exports = router;
