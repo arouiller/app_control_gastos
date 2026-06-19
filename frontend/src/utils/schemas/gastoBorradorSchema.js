@@ -23,5 +23,3 @@ export const gastoBorradorSchema = z.object({
   expense_date: z.string()
     .refine(date => new Date(date) <= new Date(), 'Fecha no puede ser futura'),
 });
-
-export type GastoBorradorFormData = z.infer<typeof gastoBorradorSchema>;
