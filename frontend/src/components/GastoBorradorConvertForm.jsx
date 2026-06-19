@@ -2,6 +2,8 @@ import { useEffect, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchCategories } from '../store/categoriesSlice';
 import Input from './UI/Input';
 import Select from './UI/Select';
 import Button from './UI/Button';
@@ -30,24 +32,24 @@ const GastoBorradorConvertForm = ({
   categories = [],
   isLoading = false
 }) => {
+  const dispatch = useDispatch();
+  const { items: categoriesFromRedux } = useSelector((state) => state.categories || { items: [] });
   const dateManuallyChanged = useRef(false);
 
-  const defaultValues = useMemo(() => ({
-    descripcion: borrador?.descripcion || '',
-    monto_total: borrador?.monto_total ? String(borrador.monto_total) : '0.00',
-    moneda: borrador?.moneda || 'ARS',
-    expense_date: borrador?.expense_date || today(),
-    category_id: '',
-    medio_de_pago: borrador?.medio_de_pago || 'cash',
-    notas: '',
-    es_cuotas: borrador?.cantidad_de_cuotas > 1 || false,
-    modo_cuotas: 'total',
-    cantidad_cuotas: borrador?.cantidad_de_cuotas ? String(borrador.cantidad_de_cuotas) : '',
-  }), [borrador]);
-
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
-    defaultValues,
+    defaultValues: {
+      descripcion: '',
+      monto_total: '0.00',
+      moneda: 'ARS',
+      expense_date: today(),
+      category_id: '',
+      medio_de_pago: 'cash',
+      notas: '',
+      es_cuotas: false,
+      modo_cuotas: 'total',
+      cantidad_cuotas: '',
+    },
   });
 
   const paymentMethod = watch('medio_de_pago');
@@ -56,6 +58,30 @@ const GastoBorradorConvertForm = ({
   const amountValue = watch('monto_total');
   const numberOfInstallments = watch('cantidad_cuotas');
   const currencyValue = watch('moneda');
+
+  // Cargar categorías
+  useEffect(() => {
+    dispatch(fetchCategories());
+  }, [dispatch]);
+
+  // Reset del formulario cuando cambia borrador o isOpen
+  useEffect(() => {
+    if (isOpen && borrador) {
+      reset({
+        descripcion: borrador.descripcion || '',
+        monto_total: borrador.monto_total ? String(borrador.monto_total) : '0.00',
+        moneda: borrador.moneda || 'ARS',
+        expense_date: borrador.expense_date || today(),
+        category_id: '',
+        medio_de_pago: borrador.medio_de_pago || 'cash',
+        notas: '',
+        es_cuotas: (borrador.cantidad_de_cuotas && borrador.cantidad_de_cuotas > 1) || false,
+        modo_cuotas: 'total',
+        cantidad_cuotas: (borrador.cantidad_de_cuotas && borrador.cantidad_de_cuotas > 1) ? String(borrador.cantidad_de_cuotas) : '',
+      });
+      dateManuallyChanged.current = false;
+    }
+  }, [isOpen, borrador, reset]);
 
   const firstBusinessDayOfNextMonth = () => {
     const d = new Date();
@@ -83,7 +109,9 @@ const GastoBorradorConvertForm = ({
     return `${n} cuotas de ${fmt(perInstallment)} ${currencyValue} (total: ${fmt(total)} ${currencyValue})`;
   }, [esInstallment, numberOfInstallments, amountValue, modoInstallment, currencyValue]);
 
-  const categoryOptions = categories.map((c) => ({ value: String(c.id), label: c.name }));
+  const categoryOptions = (categoriesFromRedux && categoriesFromRedux.length > 0)
+    ? categoriesFromRedux.map((c) => ({ value: String(c.id), label: c.name }))
+    : [];
 
   const handleFormSubmit = (data) => {
     const payload = {
