@@ -2,11 +2,12 @@ import { NavLink } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import {
   FiHome, FiDollarSign, FiCreditCard, FiBarChart2,
-  FiTag, FiUser, FiX, FiShield, FiTrendingUp,
+  FiTag, FiUser, FiX, FiShield, FiTrendingUp, FiFileText,
 } from 'react-icons/fi'
 
 const navItems = [
   { to: '/dashboard',                label: 'Dashboard',  Icon: FiHome },
+  { to: '/gastos-borrador',          label: 'Borradores', Icon: FiFileText },
   { to: '/installments',             label: 'Cuotas',     Icon: FiCreditCard },
   { to: '/reports/monthly-grouping', label: 'Reportes',   Icon: FiBarChart2 },
   { to: '/categories',               label: 'Categorías', Icon: FiTag },
