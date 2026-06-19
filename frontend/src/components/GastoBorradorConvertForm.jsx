@@ -24,7 +24,15 @@ const GastoBorradorConvertForm = ({
     reset,
   } = useForm({
     resolver: zodResolver(gastoBorradorSchema),
-    defaultValues: borrador || {
+    defaultValues: borrador ? {
+      descripcion: borrador.descripcion || '',
+      monto_total: parseFloat(borrador.monto_total) || 0,
+      moneda: borrador.moneda || 'ARS',
+      medio_de_pago: borrador.medio_de_pago || 'cash',
+      cantidad_de_cuotas: parseInt(borrador.cantidad_de_cuotas) || 1,
+      valor_de_la_cuota: parseFloat(borrador.valor_de_la_cuota) || 0,
+      expense_date: borrador.expense_date || new Date().toISOString().split('T')[0],
+    } : {
       descripcion: '',
       monto_total: 0,
       moneda: 'ARS',

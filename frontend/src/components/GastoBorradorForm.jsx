@@ -23,7 +23,15 @@ const GastoBorradorForm = ({
     reset,
   } = useForm({
     resolver: zodResolver(gastoBorradorSchema),
-    defaultValues: initialData || {
+    defaultValues: initialData ? {
+      descripcion: initialData.descripcion || '',
+      monto_total: parseFloat(initialData.monto_total) || 0,
+      moneda: initialData.moneda || 'ARS',
+      medio_de_pago: initialData.medio_de_pago || 'cash',
+      cantidad_de_cuotas: parseInt(initialData.cantidad_de_cuotas) || 1,
+      valor_de_la_cuota: parseFloat(initialData.valor_de_la_cuota) || 0,
+      expense_date: initialData.expense_date || new Date().toISOString().split('T')[0],
+    } : {
       descripcion: '',
       monto_total: 0,
       moneda: 'ARS',
