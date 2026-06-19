@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { gastoBorradorSchema } from '../utils/schemas/gastoBorradorSchema';
@@ -7,6 +7,16 @@ import Input from './UI/Input';
 import Select from './UI/Select';
 import Modal from './UI/Modal';
 
+const normalizeData = (data) => ({
+  descripcion: data?.descripcion || '',
+  monto_total: typeof data?.monto_total === 'number' ? data.monto_total : parseFloat(data?.monto_total) || 0,
+  moneda: data?.moneda || 'ARS',
+  medio_de_pago: data?.medio_de_pago || 'cash',
+  cantidad_de_cuotas: typeof data?.cantidad_de_cuotas === 'number' ? data.cantidad_de_cuotas : parseInt(data?.cantidad_de_cuotas) || 1,
+  valor_de_la_cuota: typeof data?.valor_de_la_cuota === 'number' ? data.valor_de_la_cuota : parseFloat(data?.valor_de_la_cuota) || 0,
+  expense_date: data?.expense_date || new Date().toISOString().split('T')[0],
+});
+
 const GastoBorradorForm = ({
   isOpen,
   onClose,
@@ -14,6 +24,8 @@ const GastoBorradorForm = ({
   initialData = null,
   isLoading = false
 }) => {
+  const defaultValues = useMemo(() => normalizeData(initialData), [initialData]);
+
   const {
     control,
     handleSubmit,
@@ -23,46 +35,43 @@ const GastoBorradorForm = ({
     reset,
   } = useForm({
     resolver: zodResolver(gastoBorradorSchema),
-    defaultValues: initialData ? {
-      descripcion: initialData.descripcion || '',
-      monto_total: parseFloat(initialData.monto_total) || 0,
-      moneda: initialData.moneda || 'ARS',
-      medio_de_pago: initialData.medio_de_pago || 'cash',
-      cantidad_de_cuotas: parseInt(initialData.cantidad_de_cuotas) || 1,
-      valor_de_la_cuota: parseFloat(initialData.valor_de_la_cuota) || 0,
-      expense_date: initialData.expense_date || new Date().toISOString().split('T')[0],
-    } : {
-      descripcion: '',
-      monto_total: 0,
-      moneda: 'ARS',
-      medio_de_pago: 'cash',
-      cantidad_de_cuotas: 1,
-      valor_de_la_cuota: 0,
-      expense_date: new Date().toISOString().split('T')[0],
-    },
+    defaultValues,
   });
 
-  const montTotal = watch('monto_total');
-  const cantidadCuotas = watch('cantidad_de_cuotas');
-  const valorCuota = watch('valor_de_la_cuota');
+  const montTotal = watch('monto_total') || 0;
+  const cantidadCuotas = watch('cantidad_de_cuotas') || 1;
+  const valorCuota = watch('valor_de_la_cuota') || 0;
 
   // Auto-recalculate valor_de_la_cuota when monto_total or cantidad_de_cuotas changes
   useEffect(() => {
-    if (montTotal > 0 && cantidadCuotas > 0) {
+    if (typeof montTotal === 'number' && montTotal > 0 && typeof cantidadCuotas === 'number' && cantidadCuotas > 0) {
       const calculatedValue = parseFloat((montTotal / cantidadCuotas).toFixed(2));
       setValue('valor_de_la_cuota', calculatedValue);
     }
   }, [montTotal, cantidadCuotas, setValue]);
 
-  // Detect inconsistency
-  const calculatedTotal = parseFloat((valorCuota * cantidadCuotas).toFixed(2));
-  const hasInconsistency = calculatedTotal !== parseFloat(montTotal.toFixed(2)) && montTotal > 0;
+  // Detect inconsistency - defensively handle undefined/non-numeric values
+  const hasInconsistency = useMemo(() => {
+    if (typeof valorCuota !== 'number' || typeof cantidadCuotas !== 'number' || typeof montTotal !== 'number') {
+      return false;
+    }
+    if (montTotal <= 0) return false;
+    const calculatedTotal = parseFloat((valorCuota * cantidadCuotas).toFixed(2));
+    return calculatedTotal !== parseFloat(montTotal.toFixed(2));
+  }, [valorCuota, cantidadCuotas, montTotal]);
+
+  const calculatedTotal = useMemo(() => {
+    if (typeof valorCuota !== 'number' || typeof cantidadCuotas !== 'number') {
+      return 0;
+    }
+    return parseFloat((valorCuota * cantidadCuotas).toFixed(2));
+  }, [valorCuota, cantidadCuotas]);
 
   useEffect(() => {
-    if (initialData) {
-      reset(initialData);
+    if (isOpen) {
+      reset(defaultValues);
     }
-  }, [initialData, reset]);
+  }, [isOpen, defaultValues, reset]);
 
   const handleFormSubmit = (data) => {
     onSubmit(data);
