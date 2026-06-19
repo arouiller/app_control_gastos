@@ -226,7 +226,7 @@ exports.delete = async (req, res, next) => {
 
 // POST /api/gastos-borrador/:id/convertir
 exports.convertir = async (req, res, next) => {
-  const sequelize = require('../db/sequelize');
+  const { sequelize } = require('../models');
   const transaction = await sequelize.transaction();
   try {
     const { user } = req;
