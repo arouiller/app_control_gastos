@@ -9,8 +9,8 @@ import {
   clearError,
 } from '../store/gastoBorradoresSlice';
 import GastoBorradorForm from '../components/GastoBorradorForm';
+import GastoBorradorConvertForm from '../components/GastoBorradorConvertForm';
 import Button from '../components/UI/Button';
-import Modal from '../components/UI/Modal';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { categoryService } from '../services/categoryService';
 
@@ -22,10 +22,8 @@ const GastosBorrador = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBorrador, setEditingBorrador] = useState(null);
   const [statusFilter, setStatusFilter] = useState('draft');
-  const [convertingId, setConvertingId] = useState(null);
+  const [convertingBorrador, setConvertingBorrador] = useState(null);
   const [showConvertModal, setShowConvertModal] = useState(false);
-  const [selectedCategoryId, setSelectedCategoryId] = useState('');
-  const [convertLoading, setConvertLoading] = useState(false);
 
   // Load borradores on mount and when filter changes
   useEffect(() => {
@@ -74,26 +72,23 @@ const GastosBorrador = () => {
   };
 
   const handleConvertClick = (borrador) => {
-    setConvertingId(borrador.id);
-    setSelectedCategoryId('');
+    setConvertingBorrador(borrador);
     setShowConvertModal(true);
   };
 
-  const handleConfirmConvert = async () => {
-    if (!selectedCategoryId) {
+  const handleConvertFormSubmit = async (formData) => {
+    // Extract category_id from the form submission
+    const categoryId = formData.category_id;
+    if (!categoryId) {
       alert('Por favor selecciona una categoría');
       return;
     }
     try {
-      setConvertLoading(true);
-      await dispatch(convertirBorrador({ id: convertingId, categoryId: selectedCategoryId })).unwrap();
+      await dispatch(convertirBorrador({ id: convertingBorrador.id, categoryId })).unwrap();
       setShowConvertModal(false);
-      setConvertingId(null);
-      setSelectedCategoryId('');
+      setConvertingBorrador(null);
     } catch (err) {
       // Error is in Redux state
-    } finally {
-      setConvertLoading(false);
     }
   };
 
@@ -227,66 +222,18 @@ const GastosBorrador = () => {
         isLoading={loading}
       />
 
-      {/* Convert Confirmation Modal */}
-      <Modal
+      {/* Convert Form Modal */}
+      <GastoBorradorConvertForm
         isOpen={showConvertModal}
         onClose={() => {
           setShowConvertModal(false);
-          setConvertingId(null);
-          setSelectedCategoryId('');
+          setConvertingBorrador(null);
         }}
-        title="Confirmar Conversión"
-      >
-        <div className="space-y-4">
-          <p>¿Estás seguro que deseas convertir este gasto a definitivo?</p>
-          <p className="text-sm text-gray-600">
-            Una vez convertido, se crearán las cuotas según lo especificado.
-          </p>
-
-          {/* Category Selector */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Selecciona una Categoría</label>
-            <select
-              value={selectedCategoryId}
-              onChange={(e) => setSelectedCategoryId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Selecciona una categoría --</option>
-              {categories && categories.length > 0 ? (
-                categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))
-              ) : (
-                <option disabled>Cargando categorías...</option>
-              )}
-            </select>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setShowConvertModal(false);
-                setConvertingId(null);
-                setSelectedCategoryId('');
-              }}
-              disabled={convertLoading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleConfirmConvert}
-              isLoading={convertLoading}
-              disabled={!selectedCategoryId || convertLoading}
-            >
-              Convertir
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onSubmit={handleConvertFormSubmit}
+        borrador={convertingBorrador}
+        categories={categories}
+        isLoading={loading}
+      />
     </div>
   );
 };
