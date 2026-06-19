@@ -11,6 +11,7 @@ import Categories from './pages/Categories'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
 import ExchangeRates from './pages/ExchangeRates'
+import GastosBorrador from './pages/GastosBorrador'
 
 function PrivateRoute({ children }) {
   const { user } = useSelector((state) => state.auth)
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="expenses/new" element={<ExpenseForm />} />
         <Route path="expenses/:id/edit" element={<ExpenseForm />} />
         <Route path="installments" element={<Installments />} />
+        <Route path="gastos-borrador" element={<GastosBorrador />} />
         <Route path="reports" element={<Navigate to="/reports/monthly-grouping" replace />} />
         <Route path="reports/monthly-grouping" element={<ReportMonthlyGrouping />} />
         <Route path="categories" element={<Categories />} />
