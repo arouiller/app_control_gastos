@@ -1,6 +1,6 @@
-const { GastoBorrador, Expense, Installment, Category, sequelize } = require('../models');
+const { GastoBorrador, Expense, Category, sequelize } = require('../models');
 const { success, created, error } = require('../utils/response');
-const { addMonths } = require('date-fns');
+const { addMonths, format } = require('../utils/dateHelpers');
 
 // Helper: Check inconsistency between monto_total, cantidad_de_cuotas, and valor_de_la_cuota
 const getInconsistencyWarning = (monto_total, cantidad_de_cuotas, valor_de_la_cuota) => {
@@ -10,17 +10,6 @@ const getInconsistencyWarning = (monto_total, cantidad_de_cuotas, valor_de_la_cu
     return `Suma de cuotas ($${calculatedTotal}) difiere de monto total ($${actualTotal})`;
   }
   return null;
-};
-
-// Helper: Calculate installment dates (starting next month from expense_date)
-const calculateInstallmentDates = (expenseDate, numInstallments) => {
-  const dates = [];
-  let currentDate = addMonths(new Date(expenseDate), 1);
-  for (let i = 0; i < numInstallments; i++) {
-    dates.push(new Date(currentDate));
-    currentDate = addMonths(currentDate, 1);
-  }
-  return dates;
 };
 
 // Helper: Distribute amount across installments (last may differ due to rounding)
@@ -252,7 +241,7 @@ exports.convertir = async (req, res, next) => {
       return error(res, 'Montos deben ser positivos', 400);
     }
 
-    // Create Expense
+    // Create parent Expense with is_installment flag
     const expense = await Expense.create(
       {
         user_id: user.id,
@@ -263,29 +252,36 @@ exports.convertir = async (req, res, next) => {
         date: gastoBorrador.expense_date,
         payment_method: gastoBorrador.medio_de_pago,
         is_installment: gastoBorrador.cantidad_de_cuotas > 1,
-        total_installments: gastoBorrador.cantidad_de_cuotas,
+        total_installments: gastoBorrador.cantidad_de_cuotas > 1 ? gastoBorrador.cantidad_de_cuotas : null,
+        notes: '',
       },
       { transaction }
     );
 
-    // Create installments if cantidad_de_cuotas > 1
+    // Create child expenses if cantidad_de_cuotas > 1 (using padre-hijo structure, not Installment table)
     if (gastoBorrador.cantidad_de_cuotas > 1) {
-      const installmentDates = calculateInstallmentDates(gastoBorrador.expense_date, gastoBorrador.cantidad_de_cuotas);
       const installmentAmounts = distributeAmount(gastoBorrador.monto_total, gastoBorrador.cantidad_de_cuotas);
+      const childrenData = [];
 
-      const installments = [];
-      for (let i = 0; i < gastoBorrador.cantidad_de_cuotas; i++) {
-        installments.push({
-          expense_id: expense.id,
-          installment_number: i + 1,
+      for (let i = 1; i <= gastoBorrador.cantidad_de_cuotas; i++) {
+        const childDate = format(addMonths(new Date(gastoBorrador.expense_date), i - 1));
+        childrenData.push({
+          user_id: user.id,
+          category_id: category_id,
+          description: gastoBorrador.descripcion,
+          amount: installmentAmounts[i - 1],
+          currency: gastoBorrador.moneda,
+          date: childDate,
+          payment_method: gastoBorrador.medio_de_pago,
+          is_installment: true,
           total_installments: gastoBorrador.cantidad_de_cuotas,
-          amount: installmentAmounts[i],
-          due_date: installmentDates[i],
-          is_paid: false,
+          installment_number: i,
+          installment_group_id: expense.id,
+          notes: '',
         });
       }
 
-      await Installment.bulkCreate(installments, { transaction });
+      await Expense.bulkCreate(childrenData, { transaction });
     }
 
     // Update GastoBorrador
