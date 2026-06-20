@@ -62,6 +62,8 @@ export default function Installments() {
 
   const [grouped, setGrouped] = useState([])
   const [chartRows, setChartRows] = useState([])
+  const [pendingInstallments, setPendingInstallments] = useState([])
+  const [pendingGrandTotal, setPendingGrandTotal] = useState({ ars: 0, usd: 0, original: 0 })
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [displayCurrency, setDisplayCurrency] = useState('USD')
@@ -119,12 +121,15 @@ export default function Installments() {
     setLoading(true)
     try {
       const params = catIds && catIds.length > 0 ? { categoryIds: catIds.join(',') } : {}
-      const [groupedRes, chartRes] = await Promise.all([
+      const [groupedRes, chartRes, pendingRes] = await Promise.all([
         installmentService.getGrouped(params),
         installmentService.getMonthlyChart(params),
+        installmentService.getPending(params),
       ])
       setGrouped(groupedRes.data || [])
       setChartRows(chartRes.data || [])
+      setPendingInstallments(pendingRes.data || [])
+      setPendingGrandTotal(pendingRes.grandTotal || { ars: 0, usd: 0, original: 0 })
     } catch {
       toast.error('Error al cargar cuotas')
     } finally {
@@ -162,6 +167,16 @@ export default function Installments() {
   const getAmount = (row, field) => {
     const key = displayCurrency === 'ARS' ? 'inArs' : 'inUsd'
     return row[key][field]
+  }
+
+  const getPendingAmount = (totalPending) => {
+    const field = displayCurrency === 'ARS' ? 'ars' : 'usd'
+    return totalPending[field] || 0
+  }
+
+  const getGrandTotalAmount = (grandTotal) => {
+    const field = displayCurrency === 'ARS' ? 'ars' : 'usd'
+    return grandTotal[field] || 0
   }
 
   if (loading && grouped.length === 0) return <PageLoader />
@@ -267,6 +282,62 @@ export default function Installments() {
               <p className="text-xs text-neutral-darker mt-1">{displayCurrency}</p>
             </Card>
           </div>
+
+          {/* Próximas Cuotas Pendientes Table */}
+          {pendingInstallments.length > 0 && (
+            <Card className="p-0 overflow-hidden">
+              <div className="px-4 py-3 border-b border-neutral">
+                <CardTitle>Cuotas Próximas Pendientes</CardTitle>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-neutral">
+                      <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3">Descripción</th>
+                      <th className="text-left text-xs font-semibold text-neutral-darker px-4 py-3 hidden sm:table-cell">Categoría</th>
+                      <th className="text-center text-xs font-semibold text-neutral-darker px-4 py-3">Cuotas Pendientes</th>
+                      <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Monto por Cuota</th>
+                      <th className="text-right text-xs font-semibold text-neutral-darker px-4 py-3">Total Pendiente</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingInstallments.map((row) => (
+                      <tr key={row.parentId} className="border-b border-neutral last:border-0 hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-medium text-primary">{row.description}</p>
+                        </td>
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          {row.category ? (
+                            <span className="flex items-center gap-1 text-sm text-neutral-darker">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.category.color || '#ccc' }} />
+                              {row.category.name}
+                            </span>
+                          ) : <span className="text-neutral-darker">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant="warning" className="text-xs">{row.pendingCount} de {row.totalInstallments}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-sm text-neutral-darker">
+                          {formatCurrency(row.amountPerInstallment)} {row.originalCurrency}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold text-sm text-danger">
+                          {formatCurrency(getPendingAmount(row.totalPending))}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-50 border-t-2 border-neutral">
+                      <td colSpan="4" className="px-4 py-3 text-right font-semibold text-sm text-primary">
+                        TOTAL CUOTAS PENDIENTES:
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-sm text-danger">
+                        {formatCurrency(getGrandTotalAmount(pendingGrandTotal))}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
 
           {/* Monthly chart */}
           {chartData.length > 0 && (

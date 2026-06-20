@@ -203,6 +203,98 @@ const getMonthlyChart = async (req, res, next) => {
   }
 };
 
+// Pending installments detailed view: each pending installment as a row
+// Shows: description, category, pending_count, amount_per_installment, total_pending
+const getPendingInstallments = async (req, res, next) => {
+  try {
+    const { categoryId, categoryIds: categoryIdsStr } = req.query;
+    const catIds = parseCategoryFilter(categoryId, categoryIdsStr);
+    const params = [req.user.id];
+    let filter = '';
+
+    if (catIds.length > 0) {
+      filter = `AND ewc.category_id IN (${catIds.map(() => '?').join(',')})`;
+      params.push(...catIds);
+    }
+
+    // Get pending child installments with parent info
+    const rows = await sequelize.query(
+      `SELECT
+        ewc.id,
+        ewc.description,
+        ewc.original_amount AS amount_per_installment,
+        ewc.original_currency,
+        ewc.amount_in_ars AS amount_ars,
+        ewc.amount_in_usd AS amount_usd,
+        ewc.installment_number,
+        ewc.total_installments,
+        ewc.installment_group_id,
+        c.id AS cat_id, c.name AS cat_name, c.color AS cat_color,
+        parent.date AS parent_date
+       FROM expenses_with_conversions ewc
+       JOIN expenses parent ON ewc.installment_group_id = parent.id
+       LEFT JOIN categories c ON ewc.category_id = c.id
+       WHERE ewc.user_id = ?
+         AND ewc.is_installment = TRUE
+         AND ewc.installment_group_id IS NOT NULL
+         AND ewc.expense_date > CURDATE()
+         ${filter}
+       ORDER BY ewc.expense_date ASC, ewc.installment_number ASC`,
+      { replacements: params, type: sequelize.QueryTypes.SELECT }
+    );
+
+    // Group by parent installment_group_id to calculate pending count
+    const grouped = {};
+    rows.forEach((r) => {
+      const parentId = r.installment_group_id;
+      if (!grouped[parentId]) {
+        grouped[parentId] = [];
+      }
+      grouped[parentId].push(r);
+    });
+
+    // Format response: each parent becomes one row with aggregated pending info
+    const formatted = Object.values(grouped).map((parentInstallments) => {
+      const first = parentInstallments[0];
+      const pendingCount = parentInstallments.length;
+      const totalPendingArs = parentInstallments.reduce((sum, r) => sum + (r.amount_ars || 0), 0);
+      const totalPendingUsd = parentInstallments.reduce((sum, r) => sum + (r.amount_usd || 0), 0);
+      const totalPendingOriginal = parentInstallments.reduce((sum, r) => sum + parseFloat(r.amount_per_installment || 0), 0);
+
+      return {
+        parentId: first.installment_group_id,
+        description: first.description,
+        category: first.cat_id ? { id: first.cat_id, name: first.cat_name, color: first.cat_color } : null,
+        pendingCount,
+        totalInstallments: first.total_installments,
+        amountPerInstallment: parseFloat(first.amount_per_installment),
+        originalCurrency: first.original_currency,
+        totalPending: {
+          original: totalPendingOriginal,
+          ars: totalPendingArs != null ? parseFloat(totalPendingArs) : null,
+          usd: totalPendingUsd != null ? parseFloat(totalPendingUsd) : null,
+        },
+      };
+    });
+
+    // Calculate grand total
+    const grandTotalArs = formatted.reduce((sum, r) => sum + (r.totalPending.ars || 0), 0);
+    const grandTotalUsd = formatted.reduce((sum, r) => sum + (r.totalPending.usd || 0), 0);
+    const grandTotalOriginal = formatted.reduce((sum, r) => sum + r.totalPending.original, 0);
+
+    return success(res, {
+      data: formatted,
+      grandTotal: {
+        original: grandTotalOriginal,
+        ars: grandTotalArs,
+        usd: grandTotalUsd,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const payInstallment = async (req, res, next) =>
   error(res, 'Marcación de pago por cuota es una funcionalidad futura', 501);
 const unpayInstallment = async (req, res, next) =>
@@ -211,6 +303,6 @@ const deleteInstallment = async (req, res, next) =>
   error(res, 'Eliminá el gasto padre para eliminar todas las cuotas', 403);
 
 module.exports = {
-  listInstallments, getGrouped, getMonthlyChart,
+  listInstallments, getGrouped, getMonthlyChart, getPendingInstallments,
   payInstallment, unpayInstallment, deleteInstallment,
 };

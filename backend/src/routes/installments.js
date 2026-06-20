@@ -6,6 +6,7 @@ router.use(authenticate);
 
 router.get('/grouped', ctrl.getGrouped);
 router.get('/chart', ctrl.getMonthlyChart);
+router.get('/pending', ctrl.getPendingInstallments);
 router.get('/', ctrl.listInstallments);
 router.put('/:id/pay', ctrl.payInstallment);
 router.put('/:id/unpay', ctrl.unpayInstallment);

@@ -13,6 +13,10 @@ export const installmentService = {
     const { data } = await api.get('/installments/chart', { params })
     return data
   },
+  getPending: async (params = {}) => {
+    const { data } = await api.get('/installments/pending', { params })
+    return data
+  },
   pay: async (id) => {
     const { data } = await api.put(`/installments/${id}/pay`)
     return data
